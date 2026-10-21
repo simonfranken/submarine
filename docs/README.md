@@ -32,9 +32,9 @@ through a git provider (`internal/submodule/git`): `submarine [dir]`. It
 fetches in the background on startup (`--no-fetch` to skip; `f` to fetch
 again) and follows changes made in other shells. `submarine --mock` shows
 the built-in mock data (`internal/submodule/mock`). The actions `u`, `b`,
-`/`, `!` only show a "not implemented" message.
+`!` only show a "not implemented" message.
 
 Next steps, roughly in order:
 
 1. Actions: checkout pin (`submodule update`), bump pin to tip, init.
-2. Filter (`/`) and "problems only" (`!`) views.
+2. "Problems only" (`!`) view; it can reuse the tree's filter.

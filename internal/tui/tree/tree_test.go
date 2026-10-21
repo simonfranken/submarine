@@ -249,3 +249,59 @@ func TestExpandAllOnLeafKeepsSelection(t *testing.T) {
 		t.Fatal("all nodes with children should be expanded")
 	}
 }
+
+func TestFilterShowsMatchesWithAncestors(t *testing.T) {
+	m := newTree(t)
+	m.SetFilter("D")
+	want := []string{"src/", "b", "modules/", "c", "d"}
+	if got := visible(m); !equal(got, want) {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+	assertCursor(t, m, "b") // a was selected and is gone: next available (an ancestor of the match)
+}
+
+func TestFilterSelectionMovesToNextThenPrevious(t *testing.T) {
+	m := newTree(t)
+	m.Select("a")
+	m.SetFilter("f")
+	assertCursor(t, m, "f")
+	m.SetFilter("")
+	m.Select("f")
+	m.SetFilter("a") // only a matches, it lies before f
+	assertCursor(t, m, "a")
+}
+
+func TestFilterWithoutMatchSelectsNothing(t *testing.T) {
+	m := newTree(t)
+	m.SetFilter("zzz")
+	if m.Selected() != nil || len(m.rows()) != 0 {
+		t.Fatalf("selected %v, rows %v", m.Selected(), visible(m))
+	}
+	m.Down() // must not panic
+	m.SetFilter("f")
+	assertCursor(t, m, "f")
+}
+
+func TestClearingFilterKeepsSelectionVisible(t *testing.T) {
+	m := newTree(t)
+	m.SetFilter("d")
+	m.Select("d")
+	m.SetFilter("")
+	assertCursor(t, m, "d")
+	want := []string{"a", "src/", "b", "modules/", "c", "d", "e", "f"}
+	if got := visible(m); !equal(got, want) {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+}
+
+func equal(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}

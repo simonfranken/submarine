@@ -34,6 +34,7 @@
 | Header | 1 line |
 | Tree | Remaining width |
 | Detail pane | 40% of the width, at least 36 columns; hidden below 90 columns |
+| Filter line | 1 line above the footer, only while filtering |
 | Footer | 1 line (more with full help) |
 
 ### Key bar and palette
@@ -207,7 +208,8 @@ colors in components.
 | `f` | Fetch all repositories (does nothing while a fetch runs) |
 | `r` | Reload everything (e.g. after editing files) |
 | `c` | Copy the absolute directory of the selected submodule to the clipboard (OSC 52, so it also works over SSH; needs terminal support, in tmux `set -g set-clipboard on`). The footer confirms with `copied <path>`. Without a local provider (mock) the path relative to the superproject is copied |
-| `u`, `b`, `/`, `!` | Planned actions (see requirements) |
+| `/` | Open the filter, see [Filter](#filter) |
+| `u`, `b`, `!` | Planned actions (see requirements) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).
@@ -215,6 +217,26 @@ grouped by directory).
 Collapsing an ancestor of the selection moves the selection to that ancestor.
 The view scrolls so the selection is always visible; when the first submodule
 is selected, headers above it are shown too.
+
+### Filter
+
+`/` shows a text input above the footer (`/ term`). While it is open the
+tree shows only the submodules whose path (which includes the name)
+contains the term, ignoring case; their ancestors stay as context and are
+shown expanded, whatever the user folded. Directory headers without a
+match vanish. If nothing matches the tree says `no submodule matches`.
+
+- **Selection.** If the selected submodule is filtered out, the next
+  visible one (in display order) is selected, else the previous one; if none
+  is left, nothing is selected (the detail pane is empty).
+- **Typing.** The input has the focus: letters edit the term, so `j`, `q`
+  etc. are text. `↑` `↓` `pgup` `pgdn` still move the selection. `enter`
+  hands the keys back to the tree (the filter stays, all keys work again);
+  `/` edits the term again.
+- **`esc`** closes the input and removes the filter, in both modes. The
+  selection stays; its ancestors are expanded so it is still visible.
+- The filter line shows the keys that apply on its right.
+- The header counts are not filtered.
 
 ### Key reference
 
@@ -237,7 +259,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `b` | Bump pin to tip | Submodule | Help | no (flashes "not implemented") |
 | `f` | Fetch all repositories | Global | Help | yes |
 | `r` | Reload everything | Global | Help | yes |
-| `/` | Filter | Global | Help | no (flashes "not implemented") |
+| `/` | Filter | Global | Help | yes |
 | `!` | Problems only | Global | Help | no (flashes "not implemented") |
 | `?` | Toggle full help | Global | Bar, Help | yes |
 | `q`, `ctrl+c` | Quit | Global | Bar, Help | yes |

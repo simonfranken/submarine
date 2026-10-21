@@ -30,7 +30,7 @@ func (m *Model) rows() []row {
 // appendRows groups mods by the directory of their RelPath. Each group with a
 // directory gets a header row; its submodules are indented one level deeper.
 func (m *Model) appendRows(out *[]row, mods []*submodule.Submodule, depth int) {
-	for _, g := range groupByDir(mods) {
+	for _, g := range groupByDir(m.filtered(mods)) {
 		d := depth
 		if g.dir != "." {
 			*out = append(*out, row{kind: rowDir, depth: depth, label: g.dir + "/"})
@@ -38,7 +38,7 @@ func (m *Model) appendRows(out *[]row, mods []*submodule.Submodule, depth int) {
 		}
 		for _, s := range g.mods {
 			*out = append(*out, row{kind: rowNode, depth: d, node: s})
-			if m.expanded[s.Path] && len(s.Children) > 0 {
+			if m.isExpanded(s) && len(s.Children) > 0 {
 				m.appendRows(out, s.Children, d+1)
 			}
 		}

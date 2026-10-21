@@ -25,6 +25,7 @@ type Model struct {
 	theme    theme.Theme
 	roots    []*submodule.Submodule
 	expanded map[string]bool // keyed by Submodule.Path; kept when ancestors collapse
+	filter   string          // lower-case; empty if not filtering
 	cursor   *submodule.Submodule
 	offset   int // index of the first visible row
 	width    int
@@ -42,9 +43,7 @@ func (m *Model) SetRoots(roots []*submodule.Submodule) {
 	m.expanded = map[string]bool{}
 	m.cursor = nil
 	m.offset = 0
-	if len(roots) > 0 {
-		m.cursor = m.rows()[m.firstNodeRow()].node
-	}
+	m.cursor = m.firstNode()
 }
 
 // ReplaceRoots swaps in a reloaded tree. Unlike SetRoots it keeps the
@@ -63,8 +62,8 @@ func (m *Model) ReplaceRoots(roots []*submodule.Submodule) {
 			break
 		}
 	}
-	if m.cursor == nil && len(roots) > 0 {
-		m.cursor = m.rows()[m.firstNodeRow()].node
+	if m.cursor == nil {
+		m.reselect(nil)
 	}
 	m.clampOffset()
 }
@@ -210,6 +209,15 @@ func (m Model) cursorRow(rows []row) int {
 	return -1
 }
 
+func (m *Model) firstNode() *submodule.Submodule {
+	for _, r := range m.rows() {
+		if r.kind == rowNode {
+			return r.node
+		}
+	}
+	return nil
+}
+
 func (m Model) firstNodeRow() int {
 	for i, r := range m.rows() {
 		if r.kind == rowNode {
@@ -304,6 +312,9 @@ func (m Model) View() string {
 			lines = append(lines, m.nodeLine(r, nameColW, refW))
 		}
 	}
+	if len(rows) == 0 && m.filter != "" {
+		lines = append(lines, theme.Fg(m.theme.Muted).Width(m.width).Render(" no submodule matches"))
+	}
 	for len(lines) < m.height {
 		lines = append(lines, strings.Repeat(" ", m.width))
 	}
@@ -324,7 +335,7 @@ func (m Model) nameColumnWidth(rows []row, refW int) int {
 }
 
 func (m Model) childCount(s *submodule.Submodule) string {
-	if len(s.Children) == 0 || m.expanded[s.Path] {
+	if len(s.Children) == 0 || m.isExpanded(s) {
 		return ""
 	}
 	return fmt.Sprintf(" [%d]", len(s.Children))
@@ -368,7 +379,7 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 	}
 	pad := func(n int) string { return base.Render(strings.Repeat(" ", max(n, 0))) }
 
-	collapsed := len(s.Children) > 0 && !m.expanded[s.Path]
+	collapsed := len(s.Children) > 0 && !m.isExpanded(s)
 
 	// toggle marker
 	marker := "  "

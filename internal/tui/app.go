@@ -4,10 +4,12 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	zone "github.com/lrstanley/bubblezone"
@@ -55,6 +57,10 @@ type Model struct {
 	detail  detail.Model
 	footer  footer.Model
 	spinner spinner.Model
+	filter  textinput.Model
+	// filtering is true while the filter line is shown; the filter applies
+	// exactly then. The input is focused while typing and blurred after enter.
+	filtering bool
 
 	width, height int
 	showDetail    bool
@@ -64,6 +70,12 @@ func New(ctx context.Context, p submodule.Provider, opts Options) Model {
 	t := theme.Default()
 	k := defaultKeys()
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
+	fi := textinput.New()
+	fi.Prompt = "/ "
+	fi.PromptStyle = theme.Fg(t.Primary)
+	fi.Cursor.Style = theme.Fg(t.Primary)
+	fi.Placeholder = "filter by name or path"
+	fi.PlaceholderStyle = theme.Fg(t.Muted)
 	m := Model{
 		ctx:      ctx,
 		provider: p,
@@ -76,6 +88,7 @@ func New(ctx context.Context, p submodule.Provider, opts Options) Model {
 		detail:   detail.New(t, k.Submodule()),
 		footer:   footer.New(t, k),
 		spinner:  sp,
+		filter:   fi,
 	}
 	m.fetcher, _ = p.(submodule.Fetcher)
 	m.watcher, _ = p.(submodule.Watcher)
@@ -309,7 +322,12 @@ func (m Model) changed(msg changeMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := m.keys
+	if m.filter.Focused() {
+		return m.typeFilter(msg)
+	}
 	switch {
+	case m.filtering && msg.Type == tea.KeyEsc:
+		m.closeFilter()
 	case key.Matches(msg, k.Quit):
 		return m, tea.Quit
 	case key.Matches(msg, k.Help):
@@ -355,12 +373,67 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.reloadTree(true)
 	case key.Matches(msg, k.Copy):
 		return m.copyPath()
-	case key.Matches(msg, k.Update, k.Bump, k.Filter, k.Issues):
+	case key.Matches(msg, k.Filter):
+		m.filtering = true
+		m.layout()
+		return m, m.filter.Focus()
+	case key.Matches(msg, k.Update, k.Bump, k.Issues):
 		cmd := m.footer.Flash("“" + msg.String() + "” is not implemented in the prototype")
 		m.layout()
 		return m, cmd
 	}
 	return m, nil
+}
+
+// typeFilter handles a key while the filter input has the focus: text edits
+// the filter, enter hands the keys back to the tree (the filter stays), esc
+// closes the filter. Arrows still move the selection.
+func (m Model) typeFilter(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch msg.Type {
+	case tea.KeyCtrlC:
+		return m, tea.Quit
+	case tea.KeyEsc:
+		m.closeFilter()
+	case tea.KeyEnter:
+		m.filter.Blur()
+	case tea.KeyUp:
+		m.tree.Up()
+	case tea.KeyDown:
+		m.tree.Down()
+	case tea.KeyPgUp:
+		m.tree.PageUp()
+	case tea.KeyPgDown:
+		m.tree.PageDown()
+	default:
+		var cmd tea.Cmd
+		m.filter, cmd = m.filter.Update(msg)
+		m.tree.SetFilter(m.filter.Value())
+		return m, cmd
+	}
+	return m, nil
+}
+
+// closeFilter hides the filter line and removes the filter; the selection stays.
+func (m *Model) closeFilter() {
+	m.filtering = false
+	m.filter.Blur()
+	m.filter.Reset()
+	m.tree.SetFilter("")
+	m.layout()
+}
+
+// filterView is the line above the footer: the input and, right-aligned, the
+// keys that apply.
+func (m Model) filterView() string {
+	hint := "enter navigate • esc close"
+	if !m.filter.Focused() {
+		hint = "/ edit • esc close"
+	}
+	hint = theme.Fg(m.theme.Muted).Render(hint)
+	m.filter.Width = max(m.width-lipgloss.Width(hint)-6, 1)
+	in := m.filter.View()
+	gap := max(m.width-2-lipgloss.Width(in)-lipgloss.Width(hint), 1)
+	return lipgloss.NewStyle().Width(m.width).Padding(0, 1).Render(in + strings.Repeat(" ", gap) + hint)
 }
 
 // copyPath copies the absolute directory of the selected submodule to the
@@ -384,7 +457,11 @@ func (m Model) copyPath() (tea.Model, tea.Cmd) {
 // layout distributes the terminal size among the components.
 func (m *Model) layout() {
 	m.footer.SetWidth(m.width)
-	bodyHeight := max(m.height-headerHeight-lipgloss.Height(m.footer.View()), 0)
+	bodyHeight := m.height - headerHeight - lipgloss.Height(m.footer.View())
+	if m.filtering {
+		bodyHeight--
+	}
+	bodyHeight = max(bodyHeight, 0)
 
 	m.showDetail = m.width >= detailHideBelow
 	treeWidth := m.width
@@ -415,9 +492,9 @@ func (m Model) View() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, pane)
 	}
 
-	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left,
-		header.View(m.theme, m.repo, m.fetch, m.spinner.View(), m.width),
-		body,
-		m.footer.View(),
-	))
+	parts := []string{header.View(m.theme, m.repo, m.fetch, m.spinner.View(), m.width), body}
+	if m.filtering {
+		parts = append(parts, m.filterView())
+	}
+	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
 }

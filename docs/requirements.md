@@ -103,13 +103,18 @@ commit hashes. It doesn't answer the questions users actually have:
 - **F53** `f` fetches again; `r` reloads everything (e.g. after editing
   files, which is not watched).
 
+- **F54** `/` filters the tree by name/path (case-insensitive substring).
+  A text input above the footer takes the term; `esc` closes it and removes
+  the filter. A selection that is filtered out moves to the next visible
+  submodule (none if nothing matches); closing the filter keeps the
+  selection. See [Filter](ux-guide.md#filter).
+
 ### Actions (planned, not implemented)
 
 | Key | Action |
 |---|---|
 | `u` | Check out the pinned commit (`git submodule update`) |
 | `b` | Bump the pin to the tip of its ref |
-| `/` | Filter by name/path |
 | `!` | Show only submodules with issues |
 
 ## Usage

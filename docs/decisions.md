@@ -231,3 +231,18 @@ those preferred refs, by commits on either side: scanning every branch's
 merge base would be too slow. Cost: a pin on main far behind its tip shows a
 younger branch that contains it if that branch's tip is closer, so "n behind
 main" is no longer visible there; `via <rule>` still tells which ref it is.
+
+## Filter: matches with ancestors, lives as long as the input
+
+`/` filters by case-insensitive substring of the submodule path. Matches
+keep their ancestors, shown expanded, because a nested submodule alone
+would lose its context; the user's fold state is not touched, so closing the
+filter restores it (plus the selection's ancestors, so the selection stays
+visible). The filter exists exactly while the input line is open, and `esc`
+closes both, so there is no hidden filter that makes the list look
+incomplete. While typing, `j`/`k`/`q` are text; `enter` returns the keys to
+the tree and keeps the filter, so a filtered list can be navigated with the
+usual keys. A filtered-out selection moves to the next visible submodule
+(previous if none follows) instead of the first, so the cursor stays near
+where it was. This adds the `bubbles/textinput` dependency (and its
+`atotto/clipboard` import).
