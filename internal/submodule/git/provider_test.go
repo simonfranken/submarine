@@ -27,17 +27,24 @@ func TestMain(m *testing.M) {
 		}
 		defer os.RemoveAll(tmp)
 		if _, err := exec.LookPath("git"); err == nil {
-			_, file, _, _ := runtime.Caller(0)
-			script := filepath.Join(filepath.Dir(file), "..", "..", "..", "scripts", "make-fixture.sh")
-			out, err := exec.Command("bash", script, filepath.Join(tmp, "fx")).CombinedOutput()
-			if err != nil {
-				panic("make-fixture.sh: " + err.Error() + "\n" + string(out))
+			if err := makeFixture(filepath.Join(tmp, "fx")); err != nil {
+				panic(err)
 			}
 			fixtureDir = filepath.Join(tmp, "fx", "super")
 		}
 		return m.Run()
 	}()
 	os.Exit(code)
+}
+
+// makeFixture runs scripts/make-fixture.sh; the superproject is dir/super.
+func makeFixture(dir string) error {
+	_, file, _, _ := runtime.Caller(0)
+	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "scripts", "make-fixture.sh")
+	if out, err := exec.Command("bash", script, dir).CombinedOutput(); err != nil {
+		return fmt.Errorf("make-fixture.sh: %v\n%s", err, out)
+	}
+	return nil
 }
 
 func loadFixture(t *testing.T) (*Provider, *submodule.Repo) {

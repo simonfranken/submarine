@@ -29,6 +29,7 @@ type Submodule struct {
 	Children []*Submodule
 	Status   *Status // nil while loading
 	Err      error   // set if loading the status failed
+	FetchErr error   // set if the last fetch failed; not an issue
 }
 
 // Presence describes whether the submodule exists on disk.
@@ -177,6 +178,7 @@ type Status struct {
 	Pinned     *Commit
 	CheckedOut *Commit
 	Tip        *Commit
-	Between    []Commit // commits that make up the pin <-> tip difference
-	Changes    *Changes // nil if the worktree is clean or the details are unknown
+	Between    []Commit  // commits that make up the pin <-> tip difference
+	Changes    *Changes  // nil if the worktree is clean or the details are unknown
+	FetchedAt  time.Time // last fetch of the submodule; zero if never
 }

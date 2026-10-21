@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 	"sync"
+	"time"
 
 	"submarine/internal/submodule"
 )
@@ -27,8 +28,13 @@ const maxBetween = 50
 
 // Provider reads a superproject and its submodules with git.
 type Provider struct {
-	root string        // absolute superproject root
-	sem  chan struct{} // bounds concurrent Status calls
+	root     string        // absolute superproject root
+	sem      chan struct{} // bounds concurrent Status calls
+	fetchSem chan struct{} // bounds concurrent fetches
+	sshEnv   []string      // extra environment for fetches
+
+	// WatchInterval is how often Watch checks for changes.
+	WatchInterval time.Duration
 
 	mu   sync.RWMutex
 	mods map[string]info // by Submodule.Path; filled by Tree
@@ -49,8 +55,11 @@ func New(dir string) (*Provider, error) {
 		return nil, fmt.Errorf("%s is not a git repository", dir)
 	}
 	return &Provider{
-		root: root,
-		sem:  make(chan struct{}, runtime.NumCPU()),
+		root:          root,
+		sem:           make(chan struct{}, runtime.NumCPU()),
+		fetchSem:      make(chan struct{}, maxFetches),
+		sshEnv:        sshBatchEnv(root),
+		WatchInterval: 2 * time.Second,
 	}, nil
 }
 
@@ -166,6 +175,12 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 	if st.Presence != submodule.PresenceOK {
 		st.Pinned = &submodule.Commit{SHA: pin[:min(7, len(pin))]}
 		return st, nil
+	}
+
+	if gitDir, _, err := gitDirs(in.dir); err == nil {
+		if fi, err := os.Stat(filepath.Join(gitDir, "FETCH_HEAD")); err == nil {
+			st.FetchedAt = fi.ModTime()
+		}
 	}
 
 	// checkout and worktree

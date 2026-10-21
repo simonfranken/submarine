@@ -47,6 +47,28 @@ func (m *Model) SetRoots(roots []*submodule.Submodule) {
 	}
 }
 
+// ReplaceRoots swaps in a reloaded tree. Unlike SetRoots it keeps the
+// expansion state and the cursor (by path); if the selected submodule is
+// gone, the cursor moves to the first one.
+func (m *Model) ReplaceRoots(roots []*submodule.Submodule) {
+	var path string
+	if m.cursor != nil {
+		path = m.cursor.Path
+	}
+	m.roots = roots
+	m.cursor = nil
+	for _, r := range m.rows() {
+		if r.kind == rowNode && r.node.Path == path {
+			m.cursor = r.node
+			break
+		}
+	}
+	if m.cursor == nil && len(roots) > 0 {
+		m.cursor = m.rows()[m.firstNodeRow()].node
+	}
+	m.clampOffset()
+}
+
 func (m *Model) SetSize(w, h int) {
 	m.width, m.height = w, h
 	m.clampOffset()

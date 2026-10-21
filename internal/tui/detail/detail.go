@@ -99,6 +99,12 @@ func (m Model) lines(s *submodule.Submodule) []string {
 			label("")+muted.Render("via "+st.Pin.Source.String()),
 		)
 	}
+	if st.Presence == submodule.PresenceOK {
+		out = append(out, label("Fetched")+muted.Render(theme.Ago(st.FetchedAt)))
+	}
+	if s.FetchErr != nil {
+		out = append(out, theme.Fg(t.Warn).Width(labelWidth).Render("fetch")+text.Render("failed: "+s.FetchErr.Error()))
+	}
 
 	// commits
 	commitLine := func(name string, c *submodule.Commit, highlight bool) string {

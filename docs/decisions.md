@@ -90,7 +90,7 @@ artificial latency.
 **Consequences.** A git backend can be added without UI changes; the UI
 stays responsive with many submodules.
 
-## D12 — No network on startup
+## D12 — No network on startup (superseded by D18)
 
 **Decision.** Work from local refs and show their age; fetching is an
 explicit action (`f`).
@@ -146,3 +146,40 @@ Dirt inside nested submodules is ignored (D7); unstaged moves show as
 removed + untracked.
 **Consequences.** One extra `git diff` per dirty submodule, none for clean
 ones. Not included: staged/unstaged markers, diff bodies, stash count.
+
+## D18 — Background fetch on startup
+
+**Context.** Without fetching, every answer is only as fresh as the user's
+last `git fetch`, which they rarely run in every submodule.
+**Decision.** Supersedes D12. Show the local state at once, then fetch the
+superproject and every initialized submodule in the background (all
+remotes, prune, no recursion: we fetch each repository ourselves, at most 8
+at once). Fetches never prompt; they fail with git's message instead.
+`--no-fetch` disables it, `f` repeats it.
+**Consequences.** Startup still doesn't wait for the network (N1). A
+failed fetch is shown per submodule and counted in the header; it is not an
+issue (D3).
+
+## D19 — Watch git metadata by polling
+
+**Context.** The view should follow changes made outside the application.
+File system events (fsnotify) need a dependency, one watch per directory
+(hundreds of repositories × ref directories hit inotify limits) and don't
+work on WSL's Windows drives or network file systems.
+**Decision.** Poll every 2 s: compare names, mtimes and sizes of each
+repository's git metadata (`FETCH_HEAD`, refs, `HEAD`, `index`, …),
+split into a remote, a local and a structure part.
+**Consequences.** Works everywhere, no dependency; a few `stat`s per
+repository per poll; changes appear within about 2 s. Edits of worktree
+files are not detected (that would mean running `git status` everywhere
+every poll); `r` reloads on demand.
+
+## D20 — Refresh is driven by the repositories, not by our fetch
+
+**Decision.** A finished fetch only updates its progress. Reloading is
+triggered solely by the watcher, so our own fetch and a fetch in another
+shell take the same path. Reloads keep the old state visible, run at most
+once per submodule at a time and coalesce bursts.
+**Consequences.** One mechanism to test and trust. After our fetch the
+data updates up to one poll interval later; the header shows "fetched just
+now" right away.

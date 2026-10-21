@@ -19,8 +19,9 @@ import (
 
 func main() {
 	useMock := flag.Bool("mock", false, "use built-in mock data instead of a real repository")
+	noFetch := flag.Bool("no-fetch", false, "don't fetch remotes in the background on startup")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: submarine [--mock] [dir]")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: submarine [--mock] [--no-fetch] [dir]")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -55,7 +56,7 @@ func main() {
 	zone.NewGlobal()
 	defer zone.Close()
 
-	p := tea.NewProgram(tui.New(ctx, provider), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(tui.New(ctx, provider, tui.Options{Fetch: !*noFetch}), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

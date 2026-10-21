@@ -18,13 +18,13 @@ bare commit hash.
 ## Status
 
 **Prototype.** The UI is complete for browsing. It reads real repositories
-through a read-only git provider (`internal/submodule/git`):
-`submarine [dir]`. `submarine --mock` shows the built-in mock data
-(`internal/submodule/mock`). Actions (`u`, `b`, `f`, `/`, `!`) only show a
-"not implemented" message.
+through a git provider (`internal/submodule/git`): `submarine [dir]`. It
+fetches in the background on startup (`--no-fetch` to skip; `f` to fetch
+again) and follows changes made in other shells. `submarine --mock` shows
+the built-in mock data (`internal/submodule/mock`). The actions `u`, `b`,
+`/`, `!` only show a "not implemented" message.
 
 Next steps, roughly in order:
 
-1. Actions: fetch, checkout pin (`submodule update`), bump pin to tip, init.
+1. Actions: checkout pin (`submodule update`), bump pin to tip, init.
 2. Filter (`/`) and "problems only" (`!`) views.
-3. Refresh after actions and on demand.

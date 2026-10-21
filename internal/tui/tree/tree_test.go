@@ -69,6 +69,23 @@ func visible(m *Model) []string {
 	return out
 }
 
+func TestReplaceRootsKeepsState(t *testing.T) {
+	m := newTree(t)
+	m.Down()  // b
+	m.Right() // expand b, cursor on c
+	m.Right() // expand c, cursor on d
+	assertCursor(t, m, "d")
+
+	m.ReplaceRoots(fixture()) // same paths, new nodes
+	assertCursor(t, m, "d")
+	if got := len(visible(m)); got != 8 {
+		t.Errorf("visible rows = %v, want b and c still expanded", visible(m))
+	}
+
+	m.ReplaceRoots(fixture()[:1]) // only "a" left
+	assertCursor(t, m, "a")
+}
+
 func TestInitiallyCollapsedWithHeaders(t *testing.T) {
 	m := newTree(t)
 	got := visible(m)

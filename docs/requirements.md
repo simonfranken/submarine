@@ -85,13 +85,28 @@ commit hashes. It doesn't answer the questions users actually have:
 - **F41** Mouse: click a row to select it, click `▸`/`▾` to toggle, scroll
   wheel moves the selection.
 
+### Fetch and refresh
+
+- **F50** On startup, after the local state is shown, the superproject and
+  every initialized submodule are fetched in the background (all remotes,
+  with prune). `--no-fetch` turns this off.
+- **F51** While fetching, the header shows progress (`fetching 12/174`)
+  instead of the fetch age; afterwards the age and the number of failed
+  fetches. The detail pane shows each submodule's last fetch and, if it
+  failed, git's message.
+- **F52** The view follows changes in the repositories, no matter who made
+  them: a fetch, commit, checkout or `git add` in another shell shows up
+  within about two seconds. Refreshing is driven by the repositories, not by
+  the application's own fetch.
+- **F53** `f` fetches again; `r` reloads everything (e.g. after editing
+  files, which is not watched).
+
 ### Actions (planned, not implemented)
 
 | Key | Action |
 |---|---|
 | `u` | Check out the pinned commit (`git submodule update`) |
 | `b` | Bump the pin to the tip of its ref |
-| `f` | Fetch remotes |
 | `/` | Filter by name/path |
 | `!` | Show only submodules with issues |
 
@@ -100,12 +115,13 @@ commit hashes. It doesn't answer the questions users actually have:
 ```sh
 submarine [dir]     # the repository containing dir (default: current directory)
 submarine --mock    # built-in mock data
+submarine --no-fetch [dir]   # no background fetch on startup
 ```
 
 ## Non-functional requirements
 
-- **N1** Startup must not block on the network. The tool works from local
-  refs and shows how old they are ("fetched 2m ago"); fetching is explicit.
+- **N1** Startup must not block on the network. The tool shows the local
+  state at once and fetches in the background (F50).
 - **N2** Loading many submodules must not freeze the UI (async, per
   submodule).
 - **N3** Colors follow the user's terminal theme (ANSI 16 colors); the UI
@@ -116,5 +132,7 @@ submarine --mock    # built-in mock data
 - **N6** Works in narrow terminals (detail pane hides below 90 columns).
 - **N7** The UI is independent of the data source: the mock and the git
   provider are interchangeable without UI changes.
-- **N8** The git provider is read-only and never uses the network; it uses
-  the `git` command line, so the user's git configuration applies.
+- **N8** The git provider only uses the network in `Fetch`, and never
+  prompts (no password, passphrase or host-key questions; those fetches
+  fail with git's message). It uses the `git` command line, so the user's
+  git configuration applies. Apart from fetching, it is read-only.

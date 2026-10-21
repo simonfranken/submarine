@@ -33,6 +33,11 @@ in several at once.
 | `Pinned`, `CheckedOut`, `Tip` | Commits (SHA, subject, author, time) |
 | `Between` | Commits that make up the pin ↔ tip difference |
 | `Changes` | Changed files of the worktree (nil if clean), see below |
+| `FetchedAt` | Last fetch of the submodule (`FETCH_HEAD` mtime); zero if never |
+
+`Submodule.FetchErr` is set if the application's last fetch of the
+submodule failed. Like loading errors, it is not an issue kind: a failed
+fetch says nothing about the submodule's state.
 
 `Status == nil` means "still loading". `Submodule.Err` is set if loading
 failed.

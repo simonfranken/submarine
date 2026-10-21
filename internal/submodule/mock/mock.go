@@ -4,9 +4,11 @@ package mock
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand/v2"
 	"path"
+	"sync"
 	"time"
 
 	"submarine/internal/submodule"
@@ -15,7 +17,9 @@ import (
 // Provider serves a fixed fixture tree.
 type Provider struct {
 	MinDelay, MaxDelay time.Duration
-	statuses           map[string]*submodule.Status
+
+	mu       sync.RWMutex // Tree can run again (reload) while Status runs
+	statuses map[string]*submodule.Status
 }
 
 func New() *Provider {
@@ -32,6 +36,8 @@ type node struct {
 }
 
 func (p *Provider) Tree(ctx context.Context) (*submodule.Repo, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
 	p.statuses = map[string]*submodule.Status{}
 	repo := &submodule.Repo{
 		Path:      "~/coding/my_project",
@@ -57,6 +63,9 @@ func (p *Provider) build(nodes []node, parent *submodule.Submodule) []*submodule
 			Parent:  parent,
 		}
 		m.Children = p.build(n.children, m)
+		if n.status.Presence == submodule.PresenceOK && n.status.FetchedAt.IsZero() {
+			n.status.FetchedAt = now.Add(-2 * time.Minute)
+		}
 		p.statuses[full] = n.status
 		out = append(out, m)
 	}
@@ -64,20 +73,52 @@ func (p *Provider) build(nodes []node, parent *submodule.Submodule) []*submodule
 }
 
 func (p *Provider) Status(ctx context.Context, path string) (*submodule.Status, error) {
-	delay := p.MinDelay
-	if span := p.MaxDelay - p.MinDelay; span > 0 {
-		delay += rand.N(span)
+	if err := p.sleep(ctx, p.MinDelay, p.MaxDelay); err != nil {
+		return nil, err
 	}
-	select {
-	case <-time.After(delay):
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	}
+	p.mu.RLock()
 	s, ok := p.statuses[path]
+	p.mu.RUnlock()
 	if !ok {
 		return nil, fmt.Errorf("unknown submodule %q", path)
 	}
 	return s, nil
+}
+
+// Fetchable is true for the superproject and initialized submodules.
+func (p *Provider) Fetchable(path string) bool {
+	if path == "" {
+		return true
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	s, ok := p.statuses[path]
+	return ok && s.Presence == submodule.PresenceOK
+}
+
+// Fetch pretends to fetch; one submodule always fails. It changes no data.
+func (p *Provider) Fetch(ctx context.Context, path string) error {
+	if err := p.sleep(ctx, 300*time.Millisecond, 2*time.Second); err != nil {
+		return err
+	}
+	if path == "src/my_submodule_3" {
+		return errors.New("git@github.com: Permission denied (publickey).")
+	}
+	return nil
+}
+
+// sleep waits a random duration in [min, max) or until ctx is done.
+func (p *Provider) sleep(ctx context.Context, min, max time.Duration) error {
+	d := min
+	if span := max - min; span > 0 {
+		d += rand.N(span)
+	}
+	select {
+	case <-time.After(d):
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // --- fixture -----------------------------------------------------------------

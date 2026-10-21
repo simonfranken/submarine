@@ -3,11 +3,11 @@ package tui
 import "github.com/charmbracelet/bubbles/key"
 
 type keyMap struct {
-	Up, Down, Left, Right, Toggle       key.Binding
-	CollapseAll, ExpandAll              key.Binding
-	Home, End, PageUp, PageDown         key.Binding
-	Update, Bump, Fetch, Filter, Issues key.Binding
-	Help, Quit                          key.Binding
+	Up, Down, Left, Right, Toggle               key.Binding
+	CollapseAll, ExpandAll                      key.Binding
+	Home, End, PageUp, PageDown                 key.Binding
+	Update, Bump, Fetch, Reload, Filter, Issues key.Binding
+	Help, Quit                                  key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -26,6 +26,7 @@ func defaultKeys() keyMap {
 		Update:      key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "checkout pin")),
 		Bump:        key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "bump pin to tip")),
 		Fetch:       key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "fetch")),
+		Reload:      key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reload")),
 		Filter:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		Issues:      key.NewBinding(key.WithKeys("!"), key.WithHelp("!", "problems only")),
 		Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
@@ -42,7 +43,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Left, k.Right, k.Toggle},
 		{k.CollapseAll, k.ExpandAll},
 		{k.Home, k.End, k.PageUp, k.PageDown},
-		{k.Update, k.Bump, k.Fetch, k.Filter, k.Issues},
+		{k.Update, k.Bump, k.Fetch, k.Reload, k.Filter, k.Issues},
 		{k.Help, k.Quit},
 	}
 }

@@ -1,7 +1,7 @@
 # AGENTS.md
 
 submarine: a Go + Bubble Tea TUI for repositories with many git submodules.
-Currently a prototype with a read-only git provider and mock data.
+Currently a prototype with a git provider (with background fetch) and mock data.
 
 ## Read first
 
@@ -20,6 +20,7 @@ and decisions. Read the relevant document before changing behavior:
 ```sh
 go run ./cmd/submarine [dir]  # run on a repository (default: cwd)
 go run ./cmd/submarine --mock # run on mock data
+go run ./cmd/submarine --no-fetch [dir]  # without background fetch
 scripts/make-fixture.sh DIR   # build a test superproject in DIR
 go vet ./...
 go test ./...
@@ -34,8 +35,9 @@ gofmt -l .                    # must print nothing
 - **Layering.** `internal/submodule` has no UI imports and decides what a
   state means (`Status.Issues()`). `internal/tui/theme` decides how it looks.
   Components never classify states or define colors themselves.
-- **Data access** only through `submodule.Provider`. The git provider is
-  read-only and must never use the network.
+- **Data access** only through `submodule.Provider` (and its optional
+  `Fetcher` / `Watcher`). The git provider only uses the network in
+  `Fetch`, and git must never prompt.
 - **Colors** only from `theme.Theme`, ANSI 16 colors for meaning (see
   `docs/ux-guide.md#colors`). Render segments on a background with a `base`
   style (`LevelStyle(level, base)`, `Delta(pin, base)`).

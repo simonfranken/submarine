@@ -63,7 +63,8 @@ indent ▸ name [n]   status          ref             delta
    `detached HEAD on pin` as information
 3. `Changes` (only with uncommitted changes), see
    [Change preview](#change-preview)
-4. `Ref` with distance and `via <rule>`
+4. `Ref` with distance and `via <rule>`; `Fetched <age>` of the submodule;
+   `fetch  failed: <git's message>` (yellow word) if the last fetch failed
 5. `Pinned`, `Checkout`, `Tip`: SHA + subject; the checkout SHA is yellow if it
    differs from the pin
 6. "Pin is n commits behind/ahead of …" / "Pin and … have diverged": commit list
@@ -115,12 +116,23 @@ Changes   5 files · 2M 1A 1D 1R · +37 −12
 - Untracked directories are shown as one entry (`tmp/`).
 ### Header
 
-`path  branch ↑↓ · n submodules · <count> <issue>… · n pin staged · n loading · fetched <age>`
+`path  branch ↑↓ · n submodules · <count> <issue>… · n pin staged · n loading · <fetch>`
 
 Issue counts are ordered by severity (unpushed, conflict, missing, off pin,
-changed), each in its level color. Zero counts are omitted. `<age>` is
-`never` if the superproject has never been fetched; a detached superproject
-shows `(detached)` as its branch.
+changed), each in its level color. Zero counts are omitted. A detached
+superproject shows `(detached)` as its branch.
+
+`<fetch>` on the right:
+
+| State | Shows |
+|---|---|
+| fetching | spinner + `fetching 12/174` (repositories done / total) |
+| done | `fetched just now`, then the age (`fetched 5m ago`) |
+| some failed | `fetched just now · 3 failed` (count in yellow) |
+| never fetched | `fetched never` |
+
+The age is the newer of the superproject's `FETCH_HEAD` and the end of the
+application's own fetch.
 
 ## Colors
 
@@ -171,7 +183,9 @@ colors in components.
 | `pgup`, `pgdn` | Move by one screen |
 | `?` | Toggle full help |
 | `q`, `ctrl+c` | Quit |
-| `u`, `b`, `f`, `/`, `!` | Planned actions (see requirements) |
+| `f` | Fetch all repositories (does nothing while a fetch runs) |
+| `r` | Reload everything (e.g. after editing files) |
+| `u`, `b`, `/`, `!` | Planned actions (see requirements) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).

@@ -3,6 +3,7 @@ package header
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 
@@ -10,8 +11,18 @@ import (
 	"submarine/internal/tui/theme"
 )
 
-// View renders repo info, state counts and fetch age on one line.
-func View(t theme.Theme, repo *submodule.Repo, width int) string {
+// Fetch is the progress of the application's own background fetch.
+type Fetch struct {
+	Running bool
+	Done    int       // repositories fetched (or failed)
+	Total   int       // repositories to fetch
+	Failed  int       // failed fetches of the last run
+	At      time.Time // when the last run finished
+}
+
+// View renders repo info, state counts and fetch state on one line. spinner
+// is the current spinner frame.
+func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, width int) string {
 	bar := lipgloss.NewStyle().Background(t.Bar)
 	seg := func(c lipgloss.TerminalColor, s string) string { return bar.Foreground(c).Render(s) }
 
@@ -60,7 +71,22 @@ func View(t theme.Theme, repo *submodule.Repo, width int) string {
 		mid += sep + seg(t.Muted, fmt.Sprintf("%d loading", loading))
 	}
 
-	right := seg(t.Muted, "fetched "+theme.Ago(repo.FetchedAt)+" ")
+	var right string
+	switch {
+	case fetch.Running:
+		right = seg(t.Primary, spinner) + seg(t.Muted, fmt.Sprintf(" fetching %d/%d ", fetch.Done, fetch.Total))
+	default:
+		// our own fetch may have finished before the watcher saw FETCH_HEAD
+		at := repo.FetchedAt
+		if fetch.At.After(at) {
+			at = fetch.At
+		}
+		right = seg(t.Muted, "fetched "+theme.Ago(at))
+		if fetch.Failed > 0 {
+			right += seg(t.Muted, " · ") + seg(t.Warn, fmt.Sprintf("%d failed", fetch.Failed))
+		}
+		right += seg(t.Muted, " ")
+	}
 
 	gap := width - lipgloss.Width(left) - lipgloss.Width(mid) - lipgloss.Width(right)
 	if gap < 4 {

@@ -13,15 +13,19 @@ internal/submodule/           domain model; NO UI imports
   model.go                    Repo, Submodule, Status, PinInfo, Commit, enums
   status.go                   Issues(), HiddenIssues(), Walk()
   provider.go                 Provider interface
-internal/submodule/git/       read-only provider using the git CLI
+internal/submodule/git/       provider using the git CLI (reads, fetch, watch)
   exec.go                     git runner (environment, errors)
   parse.go                    pure parsers for git output (status, numstat, …)
   provider.go                 Tree, Status, pin → ref resolution
+  fetch.go                    Fetch (network), Fetchable
+  watch.go                    Watch: polls git metadata for changes
+  gitdir.go                   resolves .git dirs and gitdir: files
 internal/submodule/mock/      fixture provider with artificial latency
 internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
   keys.go                     key bindings (also feed the help view)
-  msgs.go                     treeLoadedMsg, statusLoadedMsg
+  msgs.go                     tree/status/fetch/change messages
+  refresh.go                  reloader: one load per key, coalesced reruns
   theme/                      colors, glyphs, issue words, change letters, level styles
   tree/                       tree component: rows, navigation, mouse, view
   detail/                     detail pane; changes.go: change preview
@@ -47,6 +51,18 @@ type Provider interface {
 }
 ```
 
+Optional capabilities; the app type-asserts them:
+
+```go
+type Fetcher interface {
+    Fetchable(path string) bool                // initialized? ("" = superproject)
+    Fetch(ctx context.Context, path string) error
+}
+type Watcher interface {
+    Watch(ctx context.Context) <-chan Change   // {Path, Local, Structure}
+}
+```
+
 - `Tree` returns the superproject and all submodules with `Parent` and
   `Children` linked. `Status` fields are nil.
 - `Status` is called once per submodule, concurrently. It must be safe to
@@ -61,7 +77,7 @@ The mock provider (`internal/submodule/mock`) covers every state and sleeps
 `internal/submodule/git` shells out to `git -C <dir> …` (see D14).
 
 - Environment: `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0` (reads never
-  take `index.lock`), `LC_ALL=C`. No command touches the network.
+  take `index.lock`), `LC_ALL=C`. Only `Fetch` uses the network.
 - `Tree` reads each repository's `.gitmodules` (`git config -f
   .gitmodules`) and recurses into initialized submodules. It records, per
   path, the parent repository and the `.gitmodules` branch for `Status`.
@@ -72,6 +88,22 @@ The mock provider (`internal/submodule/mock`) covers every state and sleeps
   respect `ctx` (D16).
 - Superproject: branch from `symbolic-ref`, ahead/behind against
   `@{upstream}`, "fetched" from the mtime of `FETCH_HEAD`.
+- `Fetch`: `git fetch --all --prune --no-recurse-submodules --quiet` (we
+  fetch every submodule ourselves), at most 8 at once, 2 min timeout each.
+  To never prompt, `GIT_SSH_COMMAND="ssh -o BatchMode=yes"` is set unless
+  the user configured `GIT_SSH_COMMAND` or `core.sshCommand`. The error is
+  git's first line of output.
+- `Watch` polls every 2 s (`WatchInterval`) and compares a fingerprint per
+  repository: names, mtimes and sizes of the git metadata files (D19).
+  - remote part: `FETCH_HEAD`, `refs/remotes/**`, `refs/tags/**`
+  - local part: `HEAD`, `index`, `MERGE_HEAD`, `packed-refs`,
+    `refs/heads/**`, `reftable/**`
+  - structure: the worktree `.gitmodules`, and whether `.git` exists
+
+  Git dirs are resolved from `.git` (directory, or `gitdir:` file for
+  submodules, plus `commondir` for worktrees) without running git. Our own
+  reads write nothing (`GIT_OPTIONAL_LOCKS=0`), so they never trigger a
+  change. Worktree file edits are not watched (`r` reloads).
 
 ## Loading flow
 
@@ -80,7 +112,38 @@ The mock provider (`internal/submodule/mock`) covers every state and sleeps
    calling `Status()` → `statusLoadedMsg`.
 3. Each result is stored on the submodule (`Status` or `Err`); the view
    updates incrementally, including parents' hidden-issue counts.
-4. The spinner stops ticking when nothing is loading.
+4. After the first tree: the watcher starts (`changeMsg`), and the
+   background fetch starts one `tea.Cmd` per fetchable repository
+   (`fetchDoneMsg`).
+5. The spinner ticks only while something loads or fetches.
+
+### Fetch and refresh are decoupled (D20)
+
+```
+Fetch (network) ──writes refs──▶ .git/…  ◀──writes refs── user's shell
+                                   │
+                          Watch (polls every 2 s)
+                                   │ Change{Path, Local, Structure}
+                                   ▼
+                          app reloads Status / Tree
+```
+
+- `fetchDoneMsg` only updates the progress and `Submodule.FetchErr`; it
+  never reloads anything. The watcher sees the new refs and triggers the
+  reload, exactly as for a fetch made in another shell.
+- `changeMsg`:
+  - submodule, remote only → reload its `Status`
+  - submodule, local → reload it and its direct children (their pins live
+    in its index)
+  - superproject, or `.gitmodules` anywhere → reload the tree; if local,
+    also every status
+- A reloaded tree carries the old `Status`, `Err` and `FetchErr` over by
+  path, and `tree.ReplaceRoots` keeps expansion and the cursor, so a reload
+  doesn't flash spinners or move the selection.
+- The `reloader` runs at most one load per key (a submodule path, or the
+  tree). A request during a load marks it dirty; it runs once more
+  afterwards. Results therefore never arrive out of order and bursts of
+  changes (a fetch writing many refs) coalesce.
 
 ## Tree component
 
@@ -114,7 +177,10 @@ go test ./...
 - `internal/submodule`: issue classification and hidden-issue aggregation.
 - `internal/submodule/git`: parser unit tests, and integration tests
   against a fixture repository built by `scripts/make-fixture.sh` (skipped
-  if `git` is not installed).
+  if `git` is not installed). Fetch and watch tests build their own
+  fixture, since they change it; the fixture's remotes are local bare
+  repositories, so fetching works offline.
+- `internal/tui`: `reloader`.
 - `internal/tui/tree`: navigation rules. Tests need `zone.NewGlobal()` (see
   `TestMain`).
 

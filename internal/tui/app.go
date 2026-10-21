@@ -4,6 +4,7 @@ package tui
 
 import (
 	"context"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -26,16 +27,29 @@ const (
 	detailWidthRatio = 0.4
 )
 
+// Options configure the application.
+type Options struct {
+	Fetch bool // fetch all repositories in the background on startup
+}
+
 type Model struct {
 	ctx      context.Context
 	provider submodule.Provider
+	fetcher  submodule.Fetcher // nil if the provider can't fetch
+	watcher  submodule.Watcher // nil if the provider can't watch
+	opts     Options
 	theme    theme.Theme
 	keys     keyMap
 
-	repo    *submodule.Repo
-	byPath  map[string]*submodule.Submodule
-	loading int
-	err     error
+	repo   *submodule.Repo
+	byPath map[string]*submodule.Submodule
+	err    error
+
+	loads          reloader
+	reloadStatuses bool // the running or pending tree load also reloads every status
+	changes        <-chan submodule.Change
+	fetch          header.Fetch
+	ticking        bool // a spinner tick is scheduled
 
 	tree    tree.Model
 	detail  detail.Model
@@ -46,23 +60,30 @@ type Model struct {
 	showDetail    bool
 }
 
-func New(ctx context.Context, p submodule.Provider) Model {
+func New(ctx context.Context, p submodule.Provider, opts Options) Model {
 	t := theme.Default()
 	k := defaultKeys()
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
-	return Model{
+	m := Model{
 		ctx:      ctx,
 		provider: p,
+		opts:     opts,
 		theme:    t,
 		keys:     k,
+		loads:    newReloader(),
+		ticking:  true, // Init schedules the first tick
 		tree:     tree.New(t),
 		detail:   detail.New(t),
 		footer:   footer.New(t, k),
 		spinner:  sp,
 	}
+	m.fetcher, _ = p.(submodule.Fetcher)
+	m.watcher, _ = p.(submodule.Watcher)
+	return m
 }
 
 func (m Model) Init() tea.Cmd {
+	m.loads.start(treeKey)
 	return tea.Batch(m.loadTree(), m.spinner.Tick)
 }
 
@@ -80,6 +101,74 @@ func (m Model) loadStatus(path string) tea.Cmd {
 	}
 }
 
+// reloadTree loads the tree again, unless a load is running (then it runs
+// once more afterwards). With statuses, every status is reloaded too.
+func (m *Model) reloadTree(statuses bool) tea.Cmd {
+	m.reloadStatuses = m.reloadStatuses || statuses
+	if !m.loads.start(treeKey) {
+		return nil
+	}
+	return m.loadTree()
+}
+
+// reloadStatus loads one status again; the old one stays visible meanwhile.
+func (m *Model) reloadStatus(path string) tea.Cmd {
+	if !m.loads.start(path) {
+		return nil
+	}
+	return m.loadStatus(path)
+}
+
+func (m Model) waitForChange() tea.Cmd {
+	ch := m.changes
+	return func() tea.Msg {
+		c, ok := <-ch
+		return changeMsg{change: c, closed: !ok}
+	}
+}
+
+// startFetch fetches the superproject and every initialized submodule in
+// the background. It does nothing while a fetch is running.
+func (m *Model) startFetch() tea.Cmd {
+	if m.fetcher == nil || m.fetch.Running || m.repo == nil {
+		return nil
+	}
+	paths := []string{""}
+	submodule.Walk(m.repo.Submodules, func(s *submodule.Submodule) {
+		if m.fetcher.Fetchable(s.Path) {
+			paths = append(paths, s.Path)
+		}
+	})
+	m.fetch = header.Fetch{Running: true, Total: len(paths), At: m.fetch.At}
+	cmds := []tea.Cmd{m.tick()}
+	for _, p := range paths {
+		f, ctx := m.fetcher, m.ctx
+		cmds = append(cmds, func() tea.Msg { return fetchDoneMsg{p, f.Fetch(ctx, p)} })
+	}
+	return tea.Batch(cmds...)
+}
+
+// busy reports whether something shows a spinner.
+func (m Model) busy() bool {
+	if m.repo == nil || m.fetch.Running {
+		return true
+	}
+	loading := false
+	submodule.Walk(m.repo.Submodules, func(s *submodule.Submodule) {
+		loading = loading || (s.Status == nil && s.Err == nil)
+	})
+	return loading
+}
+
+// tick schedules a spinner tick if none is scheduled.
+func (m *Model) tick() tea.Cmd {
+	if m.ticking {
+		return nil
+	}
+	m.ticking = true
+	return m.spinner.Tick
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -88,25 +177,35 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case treeLoadedMsg:
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		m.repo = msg.repo
-		m.byPath = map[string]*submodule.Submodule{}
-		var cmds []tea.Cmd
-		submodule.Walk(m.repo.Submodules, func(s *submodule.Submodule) {
-			m.byPath[s.Path] = s
-			cmds = append(cmds, m.loadStatus(s.Path))
-		})
-		m.loading = len(cmds)
-		m.tree.SetRoots(m.repo.Submodules)
-		return m, tea.Batch(cmds...)
+		return m.treeLoaded(msg)
 
 	case statusLoadedMsg:
 		if s, ok := m.byPath[msg.path]; ok {
-			s.Status, s.Err = msg.status, msg.err
-			m.loading--
+			if msg.err != nil {
+				s.Err = msg.err
+			} else {
+				s.Status, s.Err = msg.status, nil
+			}
+		}
+		if m.loads.done(msg.path) {
+			return m, m.loadStatus(msg.path)
+		}
+		return m, nil
+
+	case changeMsg:
+		return m.changed(msg)
+
+	case fetchDoneMsg:
+		m.fetch.Done++
+		if msg.err != nil {
+			m.fetch.Failed++
+		}
+		if s, ok := m.byPath[msg.path]; ok {
+			s.FetchErr = msg.err
+		}
+		if m.fetch.Done == m.fetch.Total {
+			m.fetch.Running = false
+			m.fetch.At = time.Now()
 		}
 		return m, nil
 
@@ -115,8 +214,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.spinner, cmd = m.spinner.Update(msg)
 		m.tree.SetSpinner(m.spinner.View())
 		m.detail.SetSpinner(m.spinner.View())
-		if m.repo != nil && m.loading == 0 {
-			return m, nil // stop ticking once everything is loaded
+		if !m.busy() {
+			m.ticking = false // stop ticking until there is work again
+			return m, nil
 		}
 		return m, cmd
 
@@ -130,6 +230,81 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	m.footer.Update(msg)
 	return m, nil
+}
+
+// treeLoaded installs a (re)loaded tree. On a reload the known statuses are
+// carried over by path, so rows don't fall back to a spinner.
+func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	if m.loads.done(treeKey) {
+		cmds = append(cmds, m.loadTree())
+	}
+	initial := m.repo == nil
+	if msg.err != nil {
+		if initial {
+			m.err = msg.err
+			return m, nil
+		}
+		cmds = append(cmds, m.footer.Flash("reload failed: "+msg.err.Error()))
+		return m, tea.Batch(cmds...)
+	}
+
+	old := m.byPath
+	m.repo = msg.repo
+	m.byPath = map[string]*submodule.Submodule{}
+	reload := initial || m.reloadStatuses
+	m.reloadStatuses = false
+	submodule.Walk(m.repo.Submodules, func(s *submodule.Submodule) {
+		m.byPath[s.Path] = s
+		if o, ok := old[s.Path]; ok {
+			s.Status, s.Err, s.FetchErr = o.Status, o.Err, o.FetchErr
+		}
+		if reload || s.Status == nil {
+			cmds = append(cmds, m.reloadStatus(s.Path))
+		}
+	})
+
+	if initial {
+		m.tree.SetRoots(m.repo.Submodules)
+		if m.watcher != nil {
+			m.changes = m.watcher.Watch(m.ctx)
+			cmds = append(cmds, m.waitForChange())
+		}
+		if m.opts.Fetch {
+			cmds = append(cmds, m.startFetch())
+		}
+	} else {
+		m.tree.ReplaceRoots(m.repo.Submodules)
+	}
+	cmds = append(cmds, m.tick())
+	return m, tea.Batch(cmds...)
+}
+
+// changed reacts to a change the watcher saw, whoever made it.
+func (m Model) changed(msg changeMsg) (tea.Model, tea.Cmd) {
+	if msg.closed {
+		return m, nil
+	}
+	cmds := []tea.Cmd{m.waitForChange()}
+	c := msg.change
+	switch {
+	case c.Path == "" || c.Structure:
+		// superproject: pins of all submodules may have moved (local), or
+		// only its header (remote); .gitmodules: the structure changed
+		cmds = append(cmds, m.reloadTree(c.Local))
+	default:
+		s, ok := m.byPath[c.Path]
+		if !ok {
+			break
+		}
+		cmds = append(cmds, m.reloadStatus(s.Path))
+		if c.Local { // the children's pins live in this repository
+			for _, child := range s.Children {
+				cmds = append(cmds, m.reloadStatus(child.Path))
+			}
+		}
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -162,7 +337,23 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.tree.PageUp()
 	case key.Matches(msg, k.PageDown):
 		m.tree.PageDown()
-	case key.Matches(msg, k.Update, k.Bump, k.Fetch, k.Filter, k.Issues):
+	case key.Matches(msg, k.Fetch):
+		var flash string
+		switch {
+		case m.fetcher == nil:
+			flash = "this data source can't fetch"
+		case m.fetch.Running:
+			flash = "already fetching"
+		}
+		if flash != "" {
+			cmd := m.footer.Flash(flash)
+			m.layout()
+			return m, cmd
+		}
+		return m, m.startFetch()
+	case key.Matches(msg, k.Reload):
+		return m, m.reloadTree(true)
+	case key.Matches(msg, k.Update, k.Bump, k.Filter, k.Issues):
 		cmd := m.footer.Flash("“" + msg.String() + "” is not implemented in the prototype")
 		m.layout()
 		return m, cmd
@@ -204,7 +395,7 @@ func (m Model) View() string {
 	}
 
 	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left,
-		header.View(m.theme, m.repo, m.width),
+		header.View(m.theme, m.repo, m.fetch, m.spinner.View(), m.width),
 		body,
 		m.footer.View(),
 	))
