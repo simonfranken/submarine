@@ -55,7 +55,7 @@ func (s *Status) Issues() []Issue {
 	case WorktreeModified:
 		out = append(out, Issue{IssueChanged, LevelWarn, "uncommitted changes"})
 	case WorktreeUntracked:
-		out = append(out, Issue{IssueChanged, LevelWarn, "untracked files"})
+		out = append(out, Issue{IssueChanged, LevelWarn, s.untrackedText()})
 	}
 	return out
 }
@@ -78,4 +78,19 @@ func Walk(mods []*Submodule, fn func(*Submodule)) {
 		fn(m)
 		Walk(m.Children, fn)
 	}
+}
+
+// untrackedText words the untracked-files issue: "untracked repository" if
+// everything untracked is a git repository of its own, e.g. a clone that was
+// never added as a submodule.
+func (s *Status) untrackedText() string {
+	if s.Changes == nil || s.Changes.Total != len(s.Changes.Files) {
+		return "untracked files"
+	}
+	for _, f := range s.Changes.Files {
+		if f.Kind != ChangeUntracked || !f.Repo {
+			return "untracked files"
+		}
+	}
+	return "untracked repository"
 }

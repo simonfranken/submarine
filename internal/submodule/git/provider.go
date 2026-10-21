@@ -387,6 +387,9 @@ func changes(ctx context.Context, dir string, entries []entry) (*submodule.Chang
 			c.Added += n.added
 			c.Removed += n.removed
 		}
+		if e.kind == submodule.ChangeUntracked && strings.HasSuffix(e.path, "/") {
+			f.Repo = initialized(filepath.Join(dir, filepath.FromSlash(e.path)))
+		}
 		if e.kind != submodule.ChangeRemoved {
 			if fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(e.path))); err == nil {
 				f.Modified = fi.ModTime()

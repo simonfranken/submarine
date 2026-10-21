@@ -91,7 +91,9 @@ Changes   5 files · 2M 1A 1D 1R · +37 −12
   meaning, the color only supports it (N4).
 - Letters and colors: `!` red bold, `M` yellow, `A` green, `D` red, `R`
   cyan, `?` muted. Line counts: green `+n`, red `−n`; `bin` for binary
-  files, `submodule` for a moved nested pin, nothing for untracked files.
+  files, `submodule` for a moved nested pin, `repository` for an untracked
+  directory that is a git repository itself (cloned, never added as a
+  submodule), nothing for other untracked files.
 - Order: kind (`!`, `M`, `A`, `D`, `R`, `?`), then changed lines, largest
   first, because the biggest edits are the ones people remember.
 - Budget: 10 files. Every kind that occurs gets at least one line, the

@@ -163,6 +163,8 @@ func (m Model) fileLines(files []submodule.FileChange) []string {
 		switch {
 		case f.Submodule:
 			r.counts = muted.Render("submodule")
+		case f.Repo:
+			r.counts = muted.Render("repository")
 		case f.Binary:
 			r.counts = muted.Render("bin")
 		default:

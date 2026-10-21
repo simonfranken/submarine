@@ -50,3 +50,22 @@ func TestHiddenIssues(t *testing.T) {
 		t.Errorf("HiddenIssues() = %d, %v; want 2, LevelDanger", count, worst)
 	}
 }
+
+func TestUntrackedRepositoryWording(t *testing.T) {
+	repo := FileChange{Path: "lib/x/", Kind: ChangeUntracked, Repo: true}
+	file := FileChange{Path: "a.txt", Kind: ChangeUntracked}
+	for _, c := range []struct {
+		files []FileChange
+		want  string
+	}{
+		{[]FileChange{repo}, "untracked repository"},
+		{[]FileChange{repo, file}, "untracked files"},
+		{[]FileChange{file}, "untracked files"},
+	} {
+		s := &Status{Worktree: WorktreeUntracked, Changes: &Changes{Total: len(c.files), Files: c.files}}
+		got := s.Issues()
+		if len(got) == 0 || got[len(got)-1].Detail != c.want {
+			t.Errorf("%v: got %v, want %q", c.files, got, c.want)
+		}
+	}
+}

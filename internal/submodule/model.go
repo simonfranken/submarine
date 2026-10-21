@@ -132,6 +132,7 @@ type FileChange struct {
 	Removed   int       // removed lines
 	Binary    bool      // line counts are unknown
 	Submodule bool      // a nested submodule pointer changed
+	Repo      bool      // an untracked directory that is a git repository itself
 	Modified  time.Time // modification time of the file; zero if it doesn't exist
 }
 

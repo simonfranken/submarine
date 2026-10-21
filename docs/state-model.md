@@ -72,7 +72,7 @@ truth for what counts as a problem.
 | `conflict` | Merge conflict in the worktree | Danger |
 | `missing` | Not initialized; directory missing | Warn |
 | `off pin` | Checkout differs from pin | Warn |
-| `changed` | Uncommitted changes; untracked files | Warn |
+| `changed` | Uncommitted changes; untracked files (worded "untracked repository" if all of them are git repositories) | Warn |
 
 Rules:
 
