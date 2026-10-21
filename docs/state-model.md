@@ -104,17 +104,30 @@ A descendant whose load failed (`error`) counts as one danger.
 ## Resolving a pin to a ref
 
 The pin is displayed as a ref, not a hash. A commit can be on several
-branches, on none, or deep in the history, so the git provider resolves it by
-this order and records which rule applied in `PinInfo.Source`:
+branches, on none, or deep in the history. The git provider shows the
+**closest** branch and records which rule proposed it in `PinInfo.Source`.
+
+Preferred refs, in this order (each only if it exists):
+
+| Preference | Ref | `RefSource` |
+|---|---|---|
+| a | `branch = …` in `.gitmodules` | `RefFromGitmodules` |
+| b | Upstream of the branch checked out in the submodule | `RefFromCurrentBranch` |
+| c | Remote default branch (`<remote>/HEAD`) | `RefFromDefaultBranch` |
+
+Resolution:
 
 | # | Rule | `RefSource` |
 |---|---|---|
-| 1 | `branch = …` in `.gitmodules` | `RefFromGitmodules` |
-| 2 | Branch currently checked out in the submodule | `RefFromCurrentBranch` |
-| 3 | Remote default branch, if it contains the pin | `RefFromDefaultBranch` |
-| 4 | Any remote branch containing the pin, preferring the closest tip (`git branch -r --contains`) | `RefFromContains` |
-| 5 | A tag (`git describe`) | `RefFromTag` |
-| 6 | Short SHA | `RefFromSHA` |
+| 1 | Pin pushed: the branch containing the pin with the fewest commits after it. Candidates are the preferred refs that contain the pin plus any remote branch containing it (`for-each-ref --contains`); a tie goes to the preferred ref | preferred ref's, else `RefFromContains` |
+| 2 | Pin unpushed: the preferred ref with the fewest commits on either side (`↑n↓m`), ties by preference | preferred ref's |
+| 3 | A tag (`git describe`) | `RefFromTag` |
+| 4 | Short SHA | `RefFromSHA` |
+
+So a `.gitmodules` branch is shown when it is as close as any other branch,
+but a pin that sits on a feature branch shows that branch rather than
+"diverged from main". The trade-off: a pin on main that a younger branch
+also contains shows the younger branch if its tip is fewer commits away.
 
 Distances: `git rev-list --left-right --count <pin>...<ref>` gives
 `Ahead` (left) and `Behind` (right).
@@ -143,12 +156,13 @@ are local; `<pin>` is the index gitlink.
 
 Details:
 
-- Rule 1: `branch = .` means the superproject's current branch. The rule
-  applies only if `<remote>/<branch>` exists locally.
-- Rule 2 uses the checked-out branch's upstream (`<branch>@{upstream}`).
-- Rule 4 compares at most 16 containing branches (oldest tip first) and
-  picks the one with the fewest commits after the pin.
-- Rule 6 shows the short SHA; there is no tip and no distance.
+- Preference a: `branch = .` means the superproject's current branch. The
+  ref counts only if `<remote>/<branch>` exists locally.
+- Preference b uses the checked-out branch's upstream (`<branch>@{upstream}`).
+- Rule 1 counts `rev-list --count <pin>..<ref>`. Besides the preferred refs
+  it compares at most 16 containing branches (oldest tip first).
+- Rule 2 counts `rev-list --count <pin>...<ref>`.
+- Rule 4 shows the short SHA; there is no tip and no distance.
 - `--ignore-submodules=dirty`: changes inside a nested submodule do not make
   its parent `changed` (D7), but a moved nested pin does.
 - Renames are detected only for staged moves (`git mv`); an unstaged move

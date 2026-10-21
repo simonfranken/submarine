@@ -7,7 +7,8 @@ Each entry: context, decision, consequences. Newest last.
 **Context.** Hashes don't tell users whether a pin is current.
 **Decision.** Resolve each pin to a ref and show the distance (`origin/main ↓1`).
 The resolution order is fixed and the applied rule is shown in the detail pane
-(see [state-model.md](state-model.md#resolving-a-pin-to-a-ref)).
+(see [state-model.md](state-model.md#resolving-a-pin-to-a-ref); amended:
+the closest branch wins, see "Pin resolves to the closest branch").
 **Consequences.** Resolution is a heuristic; showing the rule keeps it
 transparent.
 
@@ -218,3 +219,15 @@ shown in a palette in the detail pane, next to what they act on; global keys
 (hidden below 90 columns, or under 12 lines) the footer shows these keys
 instead, so small terminals need no extra UI (no overlay or action menu).
 Keys never depend on what is visible.
+
+## Pin resolves to the closest branch
+
+A pin on a pushed feature branch showed as diverged from `origin/main`,
+because `branch = main` in `.gitmodules` won before any distance was looked
+at. Now the closest branch containing the pin wins; the `.gitmodules`
+branch, the upstream and the remote default branch only break ties (and are
+always compared, even past the 16-branch cap). An unpushed pin compares only
+those preferred refs, by commits on either side: scanning every branch's
+merge base would be too slow. Cost: a pin on main far behind its tip shows a
+younger branch that contains it if that branch's tip is closer, so "n behind
+main" is no longer visible there; `via <rule>` still tells which ref it is.

@@ -75,7 +75,7 @@ func TestTree(t *testing.T) {
 	submodule.Walk(repo.Submodules, func(s *submodule.Submodule) { paths = append(paths, s.Path) })
 	want := []string{
 		"src/core", "src/ui", "src/net", "libs/store", "libs/log", "libs/log/modules/nested",
-		"libs/feature", "libs/conflict", "libs/staged", "libs/missing", "vendor", "libs/work",
+		"libs/feature", "libs/conflict", "libs/staged", "libs/missing", "vendor", "libs/work", "libs/topic",
 	}
 	if !slices.Equal(paths, want) {
 		t.Errorf("paths = %v\nwant    %v", paths, want)
@@ -106,6 +106,7 @@ func TestStatus(t *testing.T) {
 		{path: "libs/log", ref: "origin/main", source: submodule.RefFromCurrentBranch},
 		{path: "libs/log/modules/nested", issues: []submodule.IssueKind{submodule.IssueChanged}, ref: "origin/main", source: submodule.RefFromDefaultBranch, checkout: submodule.CheckoutDetached},
 		{path: "libs/feature", ref: "origin/feat/search", source: submodule.RefFromContains, behind: 1, checkout: submodule.CheckoutDetached},
+		{path: "libs/topic", ref: "origin/feat/search", source: submodule.RefFromContains, checkout: submodule.CheckoutDetached},
 		{path: "libs/conflict", issues: []submodule.IssueKind{submodule.IssueConflict}, ref: "origin/main", source: submodule.RefFromCurrentBranch, staged: true},
 		{path: "libs/staged", ref: "origin/main", source: submodule.RefFromCurrentBranch, staged: true},
 		{path: "libs/missing", issues: []submodule.IssueKind{submodule.IssueMissing}},

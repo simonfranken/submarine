@@ -72,6 +72,8 @@ g "$w" push origin main
 g "$root/work/log" submodule add "$root/remotes/nested.git" modules/nested
 g "$root/work/log" commit -m "Add nested"
 g "$root/work/log" push origin main
+# "archive" ties with main (same tip, sorts first) -> the preferred ref wins
+g "$root/work/log" push origin main:archive
 
 super="$root/super"
 git init -q "$super"
@@ -88,6 +90,7 @@ add ui libs/staged
 add net libs/missing
 add ui vendor
 add work libs/work
+add feature libs/topic -b main
 g "$super" submodule update --init --recursive
 g "$super" commit -m "Add submodules"
 
@@ -108,6 +111,13 @@ g "$super/libs/feature" fetch
 g "$super/libs/feature" checkout origin/feat/search~1
 g "$super" add libs/feature
 g "$super" commit -m "Pin feature search"
+
+# libs/topic: .gitmodules says main, but the pin is the tip of feat/search
+# -> the closest branch wins over the configured one
+g "$super/libs/topic" fetch
+g "$super/libs/topic" checkout origin/feat/search
+g "$super" add libs/topic
+g "$super" commit -m "Pin topic search"
 
 # src/core: checkout moved away from the pin -> off pin
 g "$super/src/core" checkout HEAD~1
