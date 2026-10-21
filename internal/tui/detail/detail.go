@@ -82,6 +82,10 @@ func (m Model) lines(s *submodule.Submodule) []string {
 	if st.Checkout == submodule.CheckoutDetached {
 		out = append(out, label("")+muted.Render("detached HEAD on pin"))
 	}
+	if st.Changes != nil {
+		out = append(out, "")
+		out = append(out, m.changeLines(st.Changes, label)...)
+	}
 	out = append(out, "")
 
 	// ref

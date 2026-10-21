@@ -42,7 +42,7 @@ upstream() {
 }
 
 mkdir -p "$root/remotes" "$root/work"
-for r in core ui net store log feature nested; do remote "$r"; done
+for r in core ui net store log feature nested work; do remote "$r"; done
 
 # "feature" has a branch that main doesn't contain
 g "$root/work/feature" switch -c feat/search
@@ -56,6 +56,17 @@ g "$root/work/store" switch -c develop
 commit "$root/work/store" dev "Start develop"
 g "$root/work/store" push origin develop
 g "$root/work/store" switch main
+
+# "work" has several tracked files, to show every kind of change
+w="$root/work/work"
+seq 1 20 | sed 's/^/line /' >"$w/main.go"
+seq 1 3 | sed 's/^/util /' >"$w/util.go"
+seq 1 8 | sed 's/^/old /' >"$w/old.go"
+seq 1 5 | sed 's/^/lib /' >"$w/lib.go"
+printf '\000\001\002\003' >"$w/logo.png"
+g "$w" add .
+g "$w" commit -m "Add sources"
+g "$w" push origin main
 
 # "nested" becomes a submodule of "log"
 g "$root/work/log" submodule add "$root/remotes/nested.git" modules/nested
@@ -76,6 +87,7 @@ add core libs/conflict
 add ui libs/staged
 add net libs/missing
 add ui vendor
+add work libs/work
 g "$super" submodule update --init --recursive
 g "$super" commit -m "Add submodules"
 
@@ -105,6 +117,16 @@ echo dirty >>"$super/libs/log/modules/nested/README"
 
 # vendor: untracked file
 echo scratch >"$super/vendor/scratch.txt"
+
+# libs/work: one of every kind of change
+wk="$super/libs/work"
+{ seq 3 20 | sed 's/^/line /'; seq 1 6 | sed 's/^/new /'; } >"$wk/main.go"   # modified +6 -2
+echo "util 4" >>"$wk/util.go"                                                 # modified +1
+printf '\000\001\002\003\004' >"$wk/logo.png"                              # modified, binary
+echo "package work" >"$wk/notes_new.go"; g "$wk" add notes_new.go              # added (staged)
+rm "$wk/old.go"                                                               # removed
+g "$wk" mv lib.go lib2.go                                                     # renamed (staged)
+echo scratch >"$wk/scratch.txt"; mkdir "$wk/tmp"; echo x >"$wk/tmp/a.txt"      # untracked
 
 # libs/staged: new pin staged in the superproject, not committed
 g "$super/libs/staged" merge --ff-only origin/main

@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"sync"
 
@@ -182,11 +183,15 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 	case !onBranch:
 		st.Checkout = submodule.CheckoutDetached
 	}
-	out, err = run(ctx, in.dir, "status", "--porcelain=v2", "--ignore-submodules=dirty")
+	out, err = run(ctx, in.dir, "status", "--porcelain=v2", "-z", "--untracked-files=normal", "--ignore-submodules=dirty")
 	if err != nil {
 		return nil, err
 	}
-	st.Worktree = parseWorktree(out)
+	entries := parseStatus(out)
+	st.Worktree = worktreeOf(entries)
+	if st.Changes, err = changes(ctx, in.dir, entries); err != nil {
+		return nil, err
+	}
 
 	// the pin must exist locally to say anything about it
 	if _, ok, err := try(ctx, in.dir, "cat-file", "-e", pin+"^{commit}"); err != nil {
@@ -339,6 +344,46 @@ func remoteName(ctx context.Context, dir string) (string, error) {
 		return remotes[0], nil
 	}
 	return "", nil
+}
+
+// changes describes the changed files of the worktree; nil if there are
+// none. Line counts come from one `git diff HEAD`; if that fails (e.g. no
+// commit yet) they stay zero.
+func changes(ctx context.Context, dir string, entries []entry) (*submodule.Changes, error) {
+	if len(entries) == 0 {
+		return nil, nil
+	}
+	var counts map[string]numstat
+	if slices.ContainsFunc(entries, func(e entry) bool { return e.tracked && !e.submodule }) {
+		out, ok, err := try(ctx, dir, "diff", "HEAD", "--numstat", "-z", "-M", "--no-ext-diff", "--ignore-submodules=dirty")
+		if err != nil {
+			return nil, err
+		}
+		if ok {
+			counts = parseNumstat(out)
+		}
+	}
+
+	c := &submodule.Changes{Total: len(entries)}
+	for _, e := range entries {
+		f := submodule.FileChange{Path: e.path, OrigPath: e.orig, Kind: e.kind, Submodule: e.submodule}
+		if n, ok := counts[e.path]; ok && !e.submodule {
+			f.Added, f.Removed, f.Binary = n.added, n.removed, n.binary
+			c.Added += n.added
+			c.Removed += n.removed
+		}
+		if e.kind != submodule.ChangeRemoved {
+			if fi, err := os.Stat(filepath.Join(dir, filepath.FromSlash(e.path))); err == nil {
+				f.Modified = fi.ModTime()
+			}
+		}
+		c.Files = append(c.Files, f)
+	}
+	c.Sort()
+	if len(c.Files) > submodule.MaxChangeFiles {
+		c.Files = c.Files[:submodule.MaxChangeFiles]
+	}
+	return c, nil
 }
 
 func commit(ctx context.Context, dir, rev string) (*submodule.Commit, error) {

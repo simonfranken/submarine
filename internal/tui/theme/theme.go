@@ -13,6 +13,7 @@ import (
 type Theme struct {
 	Primary  lipgloss.TerminalColor // accent: branch names, commit hashes
 	Info     lipgloss.TerminalColor
+	Added    lipgloss.TerminalColor // added lines and files
 	Warn     lipgloss.TerminalColor
 	Danger   lipgloss.TerminalColor
 	Muted    lipgloss.TerminalColor
@@ -31,6 +32,7 @@ func Default() Theme {
 	return Theme{
 		Primary:  lipgloss.Color("6"), // cyan
 		Info:     lipgloss.Color("4"), // blue
+		Added:    lipgloss.Color("2"), // green
 		Warn:     lipgloss.Color("3"), // yellow
 		Danger:   lipgloss.Color("1"), // red
 		Muted:    lipgloss.Color("8"), // bright black / grey
@@ -49,17 +51,17 @@ func Fg(c lipgloss.TerminalColor) lipgloss.Style {
 
 // Glyphs are the few symbols used next to the state words.
 type Glyphs struct {
-	Staged, Ahead, Behind, Collapsed, Expanded, Problems string
+	Staged, Ahead, Behind, Collapsed, Expanded, Problems, Minus, From, Rule string
 }
 
 func Unicode() Glyphs {
 	return Glyphs{
-		Staged: "●", Ahead: "↑", Behind: "↓", Collapsed: "▸", Expanded: "▾", Problems: "·",
+		Staged: "●", Ahead: "↑", Behind: "↓", Collapsed: "▸", Expanded: "▾", Problems: "·", Minus: "−", From: "←", Rule: "─",
 	}
 }
 
 func ASCII() Glyphs {
 	return Glyphs{
-		Staged: "*", Ahead: "^", Behind: "v", Collapsed: ">", Expanded: "v", Problems: ".",
+		Staged: "*", Ahead: "^", Behind: "v", Collapsed: ">", Expanded: "v", Problems: ".", Minus: "-", From: "<-", Rule: "-",
 	}
 }

@@ -95,6 +95,24 @@ func inSync(ref string, c *submodule.Commit) *submodule.Status {
 	}
 }
 
+// changes builds a Changes value like the git provider: sorted, with
+// totals. The last file was edited age ago, earlier ones increasingly
+// longer ago.
+func changes(age time.Duration, files []submodule.FileChange) *submodule.Changes {
+	c := &submodule.Changes{Files: files, Total: len(files)}
+	for i := range files {
+		f := &files[i]
+		if f.Kind != submodule.ChangeRemoved {
+			n := time.Duration(len(files) - 1 - i)
+			f.Modified = time.Now().Add(-age - n*n*90*time.Minute)
+		}
+		c.Added += f.Added
+		c.Removed += f.Removed
+	}
+	c.Sort()
+	return c
+}
+
 func fixture() []node {
 	c1 := commit("3f9a1c2", "Bump golangci-lint to v2", "anna", 26*time.Hour)
 	c2 := commit("a1b2c3d", "Initial import", "ben", 40*24*time.Hour)
@@ -104,6 +122,23 @@ func fixture() []node {
 
 	srcSub2 := inSync("origin/main", commit("77aa88b", "Merge PR #42", "dana", 5*time.Hour))
 	srcSub2.Worktree = submodule.WorktreeModified
+	srcSub2.Changes = changes(20*time.Minute, []submodule.FileChange{
+		{Path: "internal/client/retry.go", Kind: submodule.ChangeModified, Added: 84, Removed: 12},
+		{Path: "internal/client/backoff.go", Kind: submodule.ChangeModified, Added: 41, Removed: 3},
+		{Path: "internal/server/handler.go", Kind: submodule.ChangeModified, Added: 17, Removed: 17},
+		{Path: "README.md", Kind: submodule.ChangeModified, Added: 6, Removed: 2},
+		{Path: "go.mod", Kind: submodule.ChangeModified, Added: 2, Removed: 2},
+		{Path: "go.sum", Kind: submodule.ChangeModified, Added: 9, Removed: 4},
+		{Path: "Makefile", Kind: submodule.ChangeModified, Added: 1, Removed: 1},
+		{Path: "internal/client/retry_test.go", Kind: submodule.ChangeAdded, Added: 63},
+		{Path: "docs/design/backoff-notes.md", Kind: submodule.ChangeAdded, Added: 28},
+		{Path: "internal/legacy/old_client.go", Kind: submodule.ChangeRemoved, Removed: 212},
+		{Path: "assets/logo.png", Kind: submodule.ChangeModified, Binary: true},
+		{Path: "internal/client/transport.go", OrigPath: "internal/net/transport.go", Kind: submodule.ChangeRenamed, Added: 5, Removed: 1},
+		{Path: "scratch.txt", Kind: submodule.ChangeUntracked},
+		{Path: "tmp/", Kind: submodule.ChangeUntracked},
+		{Path: "profile.out", Kind: submodule.ChangeUntracked},
+	})
 
 	subSubPin := commit("4e5f6a7", "Add feature flag", "eve", 30*time.Hour)
 	subSubTip := commit("9f8e7d6", "Fix login timeout", "anna", 2*time.Hour)
@@ -118,6 +153,10 @@ func fixture() []node {
 
 	schema := inSync("origin/main", commit("1a2b3c4", "Add v3 schema", "ben", 6*24*time.Hour))
 	schema.Worktree = submodule.WorktreeUntracked
+	schema.Changes = changes(40*time.Minute, []submodule.FileChange{
+		{Path: "v3/user.schema.json", Kind: submodule.ChangeUntracked},
+		{Path: "v3/order.schema.json", Kind: submodule.ChangeUntracked},
+	})
 
 	unpushed := commit("b7c8d9e", "Hotfix null pointer in parser", "you", 20*time.Minute)
 	sub3Tip := commit("6f5e4d3", "Release 2.1.0", "chris", 4*24*time.Hour)

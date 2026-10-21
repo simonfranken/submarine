@@ -3,12 +3,14 @@ package git
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
 	"testing"
+	"time"
 
 	"submarine/internal/submodule"
 )
@@ -66,7 +68,7 @@ func TestTree(t *testing.T) {
 	submodule.Walk(repo.Submodules, func(s *submodule.Submodule) { paths = append(paths, s.Path) })
 	want := []string{
 		"src/core", "src/ui", "src/net", "libs/store", "libs/log", "libs/log/modules/nested",
-		"libs/feature", "libs/conflict", "libs/staged", "libs/missing", "vendor",
+		"libs/feature", "libs/conflict", "libs/staged", "libs/missing", "vendor", "libs/work",
 	}
 	if !slices.Equal(paths, want) {
 		t.Errorf("paths = %v\nwant    %v", paths, want)
@@ -101,6 +103,7 @@ func TestStatus(t *testing.T) {
 		{path: "libs/staged", ref: "origin/main", source: submodule.RefFromCurrentBranch, staged: true},
 		{path: "libs/missing", issues: []submodule.IssueKind{submodule.IssueMissing}},
 		{path: "vendor", issues: []submodule.IssueKind{submodule.IssueChanged}, ref: "origin/main", source: submodule.RefFromCurrentBranch, behind: 2},
+		{path: "libs/work", issues: []submodule.IssueKind{submodule.IssueChanged}, ref: "origin/main", source: submodule.RefFromCurrentBranch},
 	}
 	for _, tt := range tests {
 		st, err := p.Status(context.Background(), tt.path)
@@ -136,6 +139,92 @@ func TestStatus(t *testing.T) {
 		if st.Pinned == nil || st.CheckedOut == nil || st.Tip == nil || st.Pinned.Author != "Ada Lovelace" {
 			t.Errorf("%s: commits %+v %+v %+v", tt.path, st.Pinned, st.CheckedOut, st.Tip)
 		}
+	}
+}
+
+func TestChanges(t *testing.T) {
+	p, _ := loadFixture(t)
+	ctx := context.Background()
+
+	st, err := p.Status(ctx, "libs/work")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := st.Changes
+	if c == nil {
+		t.Fatal("libs/work: Changes = nil")
+	}
+	want := []submodule.FileChange{
+		{Path: "main.go", Kind: submodule.ChangeModified, Added: 6, Removed: 2},
+		{Path: "util.go", Kind: submodule.ChangeModified, Added: 1},
+		{Path: "logo.png", Kind: submodule.ChangeModified, Binary: true},
+		{Path: "notes_new.go", Kind: submodule.ChangeAdded, Added: 1},
+		{Path: "old.go", Kind: submodule.ChangeRemoved, Removed: 8},
+		{Path: "lib2.go", OrigPath: "lib.go", Kind: submodule.ChangeRenamed},
+		{Path: "scratch.txt", Kind: submodule.ChangeUntracked},
+		{Path: "tmp/", Kind: submodule.ChangeUntracked},
+	}
+	for i, f := range c.Files {
+		if f.Modified.IsZero() != (f.Kind == submodule.ChangeRemoved) {
+			t.Errorf("libs/work: %s: Modified %v", f.Path, f.Modified)
+		}
+		c.Files[i].Modified = time.Time{}
+	}
+	if !slices.Equal(c.Files, want) {
+		t.Errorf("libs/work: Files =\n%+v\nwant\n%+v", c.Files, want)
+	}
+	if c.Total != 8 || c.Added != 8 || c.Removed != 10 {
+		t.Errorf("libs/work: Total %d, +%d -%d; want 8, +8 -10", c.Total, c.Added, c.Removed)
+	}
+	if n := c.Counts(nil); n[submodule.ChangeModified] != 3 || n[submodule.ChangeUntracked] != 2 {
+		t.Errorf("libs/work: Counts = %v", n)
+	}
+
+	for _, path := range []string{"libs/log", "src/ui"} {
+		st, err := p.Status(ctx, path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if st.Changes != nil {
+			t.Errorf("%s: clean submodule has Changes %+v", path, st.Changes)
+		}
+	}
+
+	st, err = p.Status(ctx, "libs/conflict")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Changes == nil || len(st.Changes.Files) != 1 || st.Changes.Files[0].Kind != submodule.ChangeConflicted {
+		t.Errorf("libs/conflict: Changes = %+v", st.Changes)
+	}
+}
+
+func TestChangesCap(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	for _, args := range [][]string{{"init", "-q"}, {"-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"}} {
+		if out, err := exec.Command("git", append([]string{"-C", dir}, args...)...).CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+	}
+	n := submodule.MaxChangeFiles + 5
+	for i := range n {
+		if err := os.WriteFile(filepath.Join(dir, fmt.Sprintf("f%03d.txt", i)), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := run(context.Background(), dir, "status", "--porcelain=v2", "-z", "--untracked-files=normal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c, err := changes(context.Background(), dir, parseStatus(out))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Total != n || len(c.Files) != submodule.MaxChangeFiles || c.Files[0].Path != "f000.txt" {
+		t.Errorf("Total %d, len %d, first %q; want %d, %d, f000.txt", c.Total, len(c.Files), c.Files[0].Path, n, submodule.MaxChangeFiles)
 	}
 }
 

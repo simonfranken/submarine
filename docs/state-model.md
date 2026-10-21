@@ -32,9 +32,28 @@ in several at once.
 | `Pin` | `Ref`, `Source`, `Ahead`, `Behind`, `Pushed` |
 | `Pinned`, `CheckedOut`, `Tip` | Commits (SHA, subject, author, time) |
 | `Between` | Commits that make up the pin ↔ tip difference |
+| `Changes` | Changed files of the worktree (nil if clean), see below |
 
 `Status == nil` means "still loading". `Submodule.Err` is set if loading
 failed.
+
+## Changes
+
+`Status.Changes` describes *what* is behind `Worktree`: one `FileChange` per
+path with a `ChangeKind` (conflicted, modified, added, removed, renamed,
+untracked), added/removed line counts, and flags for binary files and moved
+nested submodule pointers. It compares the worktree **with HEAD**, so staged
+and unstaged changes are combined (a file added to the index and edited
+afterwards is one added file).
+
+- `Files` is sorted by kind (that order), then by changed lines (largest
+  first), then by path, and capped at `MaxChangeFiles` (200). `Total`,
+  `Added` and `Removed` cover all files.
+- `FileChange.Modified` is the file's modification time (zero for removed
+  files).
+- `Worktree` is derived from the same list: conflict, else any tracked
+  change → modified, else untracked.
+- It is a preview, not an issue: it adds no issue kinds and changes no levels.
 
 ## Issues: summarizing the dimensions
 
@@ -107,7 +126,9 @@ are local; `<pin>` is the index gitlink.
 | `Pinned`, `PinStaged` | parent: `ls-files -s -- <path>` vs `ls-tree HEAD -- <path>` |
 | `Presence` | directory missing → `DirMissing`; no `.git` in it → `NotInitialized` |
 | `Checkout` | `rev-parse HEAD`, `symbolic-ref -q HEAD` (no branch → detached) |
-| `Worktree` | `status --porcelain=v2 --ignore-submodules=dirty` |
+| `Worktree`, `Changes` kinds | `status --porcelain=v2 -z --untracked-files=normal --ignore-submodules=dirty` |
+| `Changes` line counts | `diff HEAD --numstat -z -M --ignore-submodules=dirty`, only if a tracked file changed; failure leaves the counts at 0 |
+| `FileChange.Modified` | `stat` of each changed file that still exists |
 | `Pushed` | `for-each-ref --contains <pin> refs/remotes` is not empty |
 | `Pin.Ref` | rules above; the remote is `origin`, else the first remote |
 | `Ahead`, `Behind` | `rev-list --left-right --count <pin>...<ref>` |
@@ -123,6 +144,11 @@ Details:
 - Rule 6 shows the short SHA; there is no tip and no distance.
 - `--ignore-submodules=dirty`: changes inside a nested submodule do not make
   its parent `changed` (D7), but a moved nested pin does.
+- Renames are detected only for staged moves (`git mv`); an unstaged move
+  is a removed file plus an untracked file. Untracked directories are one
+  entry (`dir/`) without line counts.
+- `--untracked-files=normal` overrides `status.showUntrackedFiles`, so the
+  result doesn't depend on the user's config.
 - A missing submodule only gets a `Pinned` SHA; nested submodules of an
   uninitialized submodule are unknown and not shown.
 - If the pinned commit doesn't exist in the submodule (not fetched), loading

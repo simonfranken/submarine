@@ -61,6 +61,13 @@ commit hashes. It doesn't answer the questions users actually have:
 - **F22** Lists the commits between pin and tip (SHA, subject, author, age)
   with a title stating ahead/behind/diverged.
 - **F23** Shows child count, issues below, and the remote URL.
+- **F24** For a submodule with uncommitted changes, previews the changed
+  files so the user can remember what they were doing: a flat list with a
+  colored letter per file (`M` modified, `A` added, `D` removed, `R`
+  renamed, `?` untracked, `!` conflict), line counts (`+n −m`) per file and
+  in total, and how long ago each file was edited. Only a handful of files are
+  shown; the rest is summarized as "n more" with their kinds. Staged and
+  unstaged changes are combined.
 
 ### Header and footer
 

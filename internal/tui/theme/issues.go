@@ -25,6 +25,42 @@ func IssueWord(k submodule.IssueKind) string {
 	}
 }
 
+// ChangeLetter is the one-letter label of a changed file.
+func ChangeLetter(k submodule.ChangeKind) string {
+	switch k {
+	case submodule.ChangeConflicted:
+		return "!"
+	case submodule.ChangeModified:
+		return "M"
+	case submodule.ChangeAdded:
+		return "A"
+	case submodule.ChangeRemoved:
+		return "D"
+	case submodule.ChangeRenamed:
+		return "R"
+	default:
+		return "?"
+	}
+}
+
+// ChangeStyle returns base with the color of a change kind.
+func (t Theme) ChangeStyle(k submodule.ChangeKind, base lipgloss.Style) lipgloss.Style {
+	switch k {
+	case submodule.ChangeConflicted:
+		return base.Foreground(t.Danger).Bold(true)
+	case submodule.ChangeModified:
+		return base.Foreground(t.Warn)
+	case submodule.ChangeAdded:
+		return base.Foreground(t.Added)
+	case submodule.ChangeRemoved:
+		return base.Foreground(t.Danger)
+	case submodule.ChangeRenamed:
+		return base.Foreground(t.Primary)
+	default:
+		return base.Foreground(t.Muted)
+	}
+}
+
 // LevelStyle returns base with the text color (and weight) for a level.
 func (t Theme) LevelStyle(l submodule.Level, base lipgloss.Style) lipgloss.Style {
 	switch l {

@@ -15,16 +15,16 @@ internal/submodule/           domain model; NO UI imports
   provider.go                 Provider interface
 internal/submodule/git/       read-only provider using the git CLI
   exec.go                     git runner (environment, errors)
-  parse.go                    pure parsers for git output
+  parse.go                    pure parsers for git output (status, numstat, …)
   provider.go                 Tree, Status, pin → ref resolution
 internal/submodule/mock/      fixture provider with artificial latency
 internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
   keys.go                     key bindings (also feed the help view)
   msgs.go                     treeLoadedMsg, statusLoadedMsg
-  theme/                      colors, glyphs, issue words, level styles
+  theme/                      colors, glyphs, issue words, change letters, level styles
   tree/                       tree component: rows, navigation, mouse, view
-  detail/                     detail pane
+  detail/                     detail pane; changes.go: change preview
   header/                     header line
   footer/                     help and flash messages
 ```

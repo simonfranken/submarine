@@ -128,3 +128,21 @@ processes.
 **Decision.** The git provider limits concurrent `Status` calls to
 `runtime.NumCPU()` with a semaphore that respects `ctx`.
 **Consequences.** The UI stays unchanged; rows fill in steadily.
+
+## D17 — Change preview: flat letter list against HEAD
+
+**Context.** `changed` doesn't tell users what they changed or why; they
+want to remember what they were doing in a submodule.
+**Decision.** `Status.Changes` lists the changed files against HEAD (staged
+and unstaged combined) with line counts. The detail pane shows them as a
+flat list with a colored status letter in front, like IDE source-control
+views, instead of group headers. Sorted by kind, then by size; the 10-line
+budget keeps one line for every kind present and summarizes the rest.
+Placed directly below the issue lines, because the pane is cut by height.
+One summary line for all files, then strictly one line per file with its
+own age: a second summary line ("+1 · edited 19m ago") read as if it
+belonged to the first file.
+Dirt inside nested submodules is ignored (D7); unstaged moves show as
+removed + untracked.
+**Consequences.** One extra `git diff` per dirty submodule, none for clean
+ones. Not included: staged/unstaged markers, diff bodies, stash count.
