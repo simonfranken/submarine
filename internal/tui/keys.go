@@ -12,9 +12,9 @@ type keyMap struct {
 
 func defaultKeys() keyMap {
 	return keyMap{
-		Up:          key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/↓", "move")),
+		Up:          key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
 		Down:        key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
-		Left:        key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/→", "collapse/expand")),
+		Left:        key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "collapse, parent")),
 		Right:       key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "expand, first child")),
 		Toggle:      key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle")),
 		CollapseAll: key.NewBinding(key.WithKeys("ctrl+left", "H"), key.WithHelp("H/ctrl+←", "collapse all")),
@@ -35,7 +35,10 @@ func defaultKeys() keyMap {
 }
 
 func (k keyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Left, k.Toggle, k.Update, k.Bump, k.Fetch, k.Help, k.Quit}
+	move := key.NewBinding(key.WithKeys("up"), key.WithHelp("↑↓/jk", "move"))
+	fold := key.NewBinding(key.WithKeys("left"), key.WithHelp("←→/hl", "fold"))
+	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("H/L", "fold all"))
+	return []key.Binding{move, fold, all, k.Toggle, k.Help, k.Quit}
 }
 
 func (k keyMap) FullHelp() [][]key.Binding {

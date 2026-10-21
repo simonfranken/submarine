@@ -26,7 +26,7 @@
      my_submodule_3       unpushed       origin/main    ↑1               │ Pinned    b7c8d9e Hotfix null pointer
  libs/                                                                   │ Checkout  b7c8d9e Hotfix null pointer
      logging                             origin/main    ↓3               │ Tip       6f5e4d3 Release 2.1.0
- ↑/↓ move • ←/→ collapse/expand • space toggle • u checkout pin • … • ? help • q quit
+ ↑↓/jk move • ←→/hl fold • H/L fold all • space toggle • ? help • q quit
 ```
 
 | Area | Height / width |
