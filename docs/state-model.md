@@ -1,0 +1,108 @@
+# State model
+
+Code: `internal/submodule/model.go`, `internal/submodule/status.go`.
+
+## Three commits per submodule
+
+Every submodule involves three commits. All state is derived from comparing
+them.
+
+| Commit | Source |
+|---|---|
+| **Pinned** | The gitlink recorded in the superproject (HEAD or index) |
+| **Checked out** | The submodule's `HEAD` |
+| **Tip** | The tip of the ref the pin was resolved to, e.g. `origin/main` |
+
+This gives two independent questions:
+
+- **Is the checkout on the pin?** → `off pin` if not.
+- **Where is the pin relative to its ref?** → `↑n` / `↓n` / `↑n↓m`.
+
+## Raw status dimensions
+
+`submodule.Status` stores the raw, independent dimensions. A submodule can be
+in several at once.
+
+| Field | Values |
+|---|---|
+| `Presence` | `PresenceOK`, `NotInitialized`, `DirMissing` |
+| `Checkout` | `CheckoutMatch`, `CheckoutDiffers`, `CheckoutDetached` (on the pin, detached HEAD; informational) |
+| `Worktree` | `WorktreeClean`, `WorktreeModified`, `WorktreeUntracked`, `WorktreeConflict` |
+| `PinStaged` | Pin changed in the superproject index but not committed |
+| `Pin` | `Ref`, `Source`, `Ahead`, `Behind`, `Pushed` |
+| `Pinned`, `CheckedOut`, `Tip` | Commits (SHA, subject, author, time) |
+| `Between` | Commits that make up the pin ↔ tip difference |
+
+`Status == nil` means "still loading". `Submodule.Err` is set if loading
+failed.
+
+## Issues: summarizing the dimensions
+
+The UI never shows raw dimensions in the tree. `Status.Issues()` summarizes
+them into **issue kinds**, each with a **level**. This is the single source of
+truth for what counts as a problem.
+
+| Issue (word) | Combines | Level |
+|---|---|---|
+| `unpushed` | Pin not reachable from any remote ref | Danger |
+| `conflict` | Merge conflict in the worktree | Danger |
+| `missing` | Not initialized; directory missing | Warn |
+| `off pin` | Checkout differs from pin | Warn |
+| `changed` | Uncommitted changes; untracked files | Warn |
+
+Rules:
+
+- If the submodule is **missing**, that is its only issue (nothing else can
+  be determined).
+- Issues are returned **most severe first**: unpushed, conflict, off pin,
+  changed.
+- **Not issues** (quiet): in sync, pin behind/ahead/diverged but pushed,
+  staged pin, detached HEAD on the pin. They are shown as information only.
+- A loading error is shown as `error` (Danger) in the UI; it is not an issue
+  kind.
+
+### Levels
+
+| Level | Meaning | Presentation |
+|---|---|---|
+| `LevelQuiet` | Nothing to do | Whole row muted, no word |
+| `LevelWarn` | Look at it | Yellow word |
+| `LevelDanger` | Act now | Red bold word |
+
+### Hidden issues
+
+`Submodule.HiddenIssues()` counts the issues of **all** loaded descendants
+and returns the most severe level. A collapsed submodule shows this as `·k`
+in that level's color, so a danger can never hide inside a collapsed subtree.
+
+## Resolving a pin to a ref
+
+The pin is displayed as a ref, not a hash. A commit can be on several
+branches, on none, or deep in the history, so the git provider resolves it by
+this order and records which rule applied in `PinInfo.Source`:
+
+| # | Rule | `RefSource` |
+|---|---|---|
+| 1 | `branch = …` in `.gitmodules` | `RefFromGitmodules` |
+| 2 | Branch currently checked out in the submodule | `RefFromCurrentBranch` |
+| 3 | Remote default branch, if it contains the pin | `RefFromDefaultBranch` |
+| 4 | Any remote branch containing the pin, preferring the closest tip (`git branch -r --contains`) | `RefFromContains` |
+| 5 | A tag (`git describe`) | `RefFromTag` |
+| 6 | Short SHA | `RefFromSHA` |
+
+Distances: `git rev-list --left-right --count <pin>...<ref>` gives
+`Ahead` (left) and `Behind` (right).
+
+`Pushed` is true if the pin is reachable from any remote ref. A pin that is
+ahead of its ref can still be pushed (e.g. on another branch); only
+`Pushed == false` is dangerous.
+
+## Distance notation
+
+| Display | Meaning |
+|---|---|
+| `↓n` | The ref has n commits the pin doesn't have; the pin is behind |
+| `↑n` | The pin has n commits the ref doesn't have |
+| `↑n↓m` | Diverged |
+
+The arrows follow the convention of `git status`, lazygit and shell prompts.
