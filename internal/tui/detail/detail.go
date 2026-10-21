@@ -138,8 +138,16 @@ func (m Model) lines(s *submodule.Submodule) []string {
 	out = append(out, "")
 	if n := len(s.Children); n > 0 {
 		children := fmt.Sprintf("%d direct", n)
-		if k, worst := s.HiddenIssues(); k > 0 {
-			children += t.LevelStyle(worst, lipgloss.NewStyle()).Render(fmt.Sprintf(" · %d issue(s) below", k))
+		h := s.HiddenIssues()
+		var parts []string
+		if h.Danger > 0 {
+			parts = append(parts, t.LevelStyle(submodule.LevelDanger, lipgloss.NewStyle()).Render(fmt.Sprintf("%d error(s)", h.Danger)))
+		}
+		if h.Warn > 0 {
+			parts = append(parts, t.LevelStyle(submodule.LevelWarn, lipgloss.NewStyle()).Render(fmt.Sprintf("%d warning(s)", h.Warn)))
+		}
+		if len(parts) > 0 {
+			children += muted.Render(" · ") + strings.Join(parts, muted.Render(", ")) + muted.Render(" below")
 		}
 		out = append(out, label("Children")+children)
 	}

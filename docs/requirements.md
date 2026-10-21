@@ -34,7 +34,8 @@ commit hashes. It doesn't answer the questions users actually have:
 - **F5** A collapsed submodule shows the number of its **direct** children,
   e.g. `[2]`.
 - **F6** A collapsed submodule shows the number of issues **hidden** in all
-  its descendants (`·2`), colored by the most severe hidden issue.
+  its descendants (`·1 ·2`), one count per level: errors in red, then
+  warnings in yellow.
 - **F7** Expansion state of descendants is remembered when a parent is
   collapsed and restored when it is expanded again (except after
   "collapse all", which resets it).

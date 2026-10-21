@@ -46,9 +46,8 @@ func TestHiddenIssues(t *testing.T) {
 	loading := &Submodule{}
 	root := &Submodule{Status: ok, Children: []*Submodule{child, {Status: ok}, loading}}
 
-	count, worst := root.HiddenIssues()
-	if count != 2 || worst != LevelDanger {
-		t.Errorf("HiddenIssues() = %d, %v; want 2, LevelDanger", count, worst)
+	if got := root.HiddenIssues(); got != (Hidden{Warn: 1, Danger: 1}) {
+		t.Errorf("HiddenIssues() = %+v; want 1 warn, 1 danger", got)
 	}
 }
 
@@ -75,7 +74,7 @@ func TestHiddenIssuesCountLoadErrors(t *testing.T) {
 	bad := &Submodule{Err: errors.New("boom")}
 	loading := &Submodule{}
 	parent := &Submodule{Children: []*Submodule{bad, loading}}
-	if n, w := parent.HiddenIssues(); n != 1 || w != LevelDanger {
-		t.Errorf("got %d, %v; want 1, danger", n, w)
+	if got := parent.HiddenIssues(); got != (Hidden{Danger: 1}) {
+		t.Errorf("got %+v; want 1 danger", got)
 	}
 }

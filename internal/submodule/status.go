@@ -60,21 +60,31 @@ func (s *Status) Issues() []Issue {
 	return out
 }
 
-// HiddenIssues counts the issues of all loaded descendants and returns the
-// most severe level among them. A descendant whose load failed counts as one
-// danger, since its state is unknown.
-func (m *Submodule) HiddenIssues() (count int, worst Level) {
+// Hidden counts issues below a submodule per level.
+type Hidden struct{ Warn, Danger int }
+
+// Total is the number of issues of all levels.
+func (h Hidden) Total() int { return h.Warn + h.Danger }
+
+// HiddenIssues counts the issues of all loaded descendants per level. A
+// descendant whose load failed counts as one danger, since its state is
+// unknown.
+func (m *Submodule) HiddenIssues() Hidden {
+	var h Hidden
 	Walk(m.Children, func(c *Submodule) {
 		if c.Status == nil && c.Err != nil {
-			count++
-			worst = max(worst, LevelDanger)
+			h.Danger++
 		}
 		for _, is := range c.Status.Issues() {
-			count++
-			worst = max(worst, is.Level)
+			switch is.Level {
+			case LevelDanger:
+				h.Danger++
+			case LevelWarn:
+				h.Warn++
+			}
 		}
 	})
-	return count, worst
+	return h
 }
 
 // Walk calls fn for every submodule in depth-first order.

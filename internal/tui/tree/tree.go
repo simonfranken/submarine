@@ -15,7 +15,7 @@ import (
 )
 
 const (
-	statusWidth = 14 // "unpushed +1 ·2"
+	statusWidth = 16 // "unpushed +1 ·2 ·3"
 	deltaWidth  = 6
 	maxRefWidth = 22
 )
@@ -414,11 +414,19 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 	default:
 		status = seg(t.Muted, theme.InSync)
 	}
-	if k, worst := s.HiddenIssues(); collapsed && k > 0 {
-		if status != "" {
-			status += pad(1)
+	if h := s.HiddenIssues(); collapsed && h.Total() > 0 {
+		for _, c := range []struct {
+			level submodule.Level
+			n     int
+		}{{submodule.LevelDanger, h.Danger}, {submodule.LevelWarn, h.Warn}} {
+			if c.n == 0 {
+				continue
+			}
+			if status != "" {
+				status += pad(1)
+			}
+			status += t.LevelStyle(c.level, base).Render(fmt.Sprintf("%s%d", t.Glyphs.Problems, c.n))
 		}
-		status += t.LevelStyle(worst, base).Render(fmt.Sprintf("%s%d", t.Glyphs.Problems, k))
 	}
 	status = ansi.Truncate(status, statusWidth, "")
 	status += pad(statusWidth - lipgloss.Width(status))

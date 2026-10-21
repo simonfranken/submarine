@@ -53,9 +53,11 @@ everyone else's checkout.
 
 **Context.** Only the first level is shown by default, so nested problems
 would be invisible.
-**Decision.** Collapsed parents show `·k` (issues in all descendants), colored
-by the worst one. Problems in a child do **not** mark the parent itself as
-`changed`.
+**Decision.** Collapsed parents show `·k` (issues in all descendants), one
+count per level: red for danger, then yellow for warn (amended: a single
+count in the worst color made 1 error + 1 warning look like 2 errors; the
+status column grew from 14 to 16 for the second count). Problems in a child
+do **not** mark the parent itself as `changed`.
 
 ## D8 — Collapsed by default, branch-first navigation
 

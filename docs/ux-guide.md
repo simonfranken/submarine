@@ -47,7 +47,7 @@ indent ▸ name [n]   status          ref             delta
 | indent | 2 per depth | |
 | toggle | 3 | `▸` collapsed, `▾` expanded, blank for leaves |
 | name | fits the widest visible name | name, `[n]` = direct children (collapsed only) |
-| status | 14 | issue word, `+n`, `·k` hidden issues; muted `in sync` without issues; spinner while loading |
+| status | 16 | issue word, `+n`, `·k` hidden issues per level (red, then yellow); muted `in sync` without issues; spinner while loading |
 | ref | widest ref, max 22 | resolved ref; muted short SHA if unresolved |
 | delta | 6 | `↑n`, `↓n`, `↑n↓m` |
 
