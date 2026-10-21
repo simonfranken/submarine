@@ -98,6 +98,7 @@ Rules:
 `Submodule.HiddenIssues()` counts the issues of **all** loaded descendants
 and returns the most severe level. A collapsed submodule shows this as `·k`
 in that level's color, so a danger can never hide inside a collapsed subtree.
+A descendant whose load failed (`error`) counts as one danger.
 
 ## Resolving a pin to a ref
 

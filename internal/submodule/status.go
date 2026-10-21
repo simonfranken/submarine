@@ -61,9 +61,14 @@ func (s *Status) Issues() []Issue {
 }
 
 // HiddenIssues counts the issues of all loaded descendants and returns the
-// most severe level among them.
+// most severe level among them. A descendant whose load failed counts as one
+// danger, since its state is unknown.
 func (m *Submodule) HiddenIssues() (count int, worst Level) {
 	Walk(m.Children, func(c *Submodule) {
+		if c.Status == nil && c.Err != nil {
+			count++
+			worst = max(worst, LevelDanger)
+		}
 		for _, is := range c.Status.Issues() {
 			count++
 			worst = max(worst, is.Level)

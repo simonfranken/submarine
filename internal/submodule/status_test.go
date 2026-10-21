@@ -1,6 +1,7 @@
 package submodule
 
 import (
+	"errors"
 	"slices"
 	"testing"
 )
@@ -67,5 +68,14 @@ func TestUntrackedRepositoryWording(t *testing.T) {
 		if len(got) == 0 || got[len(got)-1].Detail != c.want {
 			t.Errorf("%v: got %v, want %q", c.files, got, c.want)
 		}
+	}
+}
+
+func TestHiddenIssuesCountLoadErrors(t *testing.T) {
+	bad := &Submodule{Err: errors.New("boom")}
+	loading := &Submodule{}
+	parent := &Submodule{Children: []*Submodule{bad, loading}}
+	if n, w := parent.HiddenIssues(); n != 1 || w != LevelDanger {
+		t.Errorf("got %d, %v; want 1, danger", n, w)
 	}
 }
