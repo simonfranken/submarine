@@ -26,6 +26,13 @@ type Watcher interface {
 	Watch(ctx context.Context) <-chan Change
 }
 
+// Locator is implemented by providers whose submodules live on the local
+// disk. Dir returns the absolute directory of path ("" is the superproject),
+// or "" if it is unknown.
+type Locator interface {
+	Dir(path string) string
+}
+
 // Change reports that the git metadata of a repository changed.
 type Change struct {
 	Path      string // "" is the superproject

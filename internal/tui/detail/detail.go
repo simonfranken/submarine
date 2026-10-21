@@ -6,6 +6,8 @@ import (
 	"path"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/charmbracelet/x/ansi"
 
@@ -20,9 +22,20 @@ type Model struct {
 	width   int
 	height  int
 	spinner string
+	help    help.Model
+	actions []key.Binding
 }
 
-func New(t theme.Theme) Model { return Model{theme: t} }
+// paletteMinHeight is the pane height below which the palette is left out:
+// the information is worth more than the hints.
+const paletteMinHeight = 12
+
+func New(t theme.Theme, actions []key.Binding) Model {
+	return Model{theme: t, help: theme.NewHelp(t), actions: actions}
+}
+
+// PaletteVisible reports whether the palette of submodule actions fits.
+func (m Model) PaletteVisible() bool { return m.height >= paletteMinHeight }
 
 func (m *Model) SetSize(w, h int)        { m.width, m.height = w, h }
 func (m *Model) SetSpinner(frame string) { m.spinner = frame }
@@ -38,10 +51,21 @@ func (m Model) View(s *submodule.Submodule) string {
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, m.width, "…")
 	}
-	if len(lines) > m.height {
-		lines = lines[:m.height]
+	height := m.height
+	var palette string
+	if m.PaletteVisible() {
+		height-- // the palette is the last line
+		m.help.Width = 0
+		palette = ansi.Truncate(m.help.ShortHelpView(m.actions), m.width, "…")
 	}
-	return lipgloss.NewStyle().Width(m.width).Height(m.height).Render(strings.Join(lines, "\n"))
+	if len(lines) > height {
+		lines = lines[:height]
+	}
+	body := lipgloss.NewStyle().Width(m.width).Height(height).Render(strings.Join(lines, "\n"))
+	if palette == "" {
+		return body
+	}
+	return body + "\n" + palette
 }
 
 func (m Model) lines(s *submodule.Submodule) []string {

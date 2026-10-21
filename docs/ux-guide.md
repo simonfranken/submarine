@@ -36,6 +36,21 @@
 | Detail pane | 40% of the width, at least 36 columns; hidden below 90 columns |
 | Footer | 1 line (more with full help) |
 
+### Key bar and palette
+
+Keys come in three groups (`keyMap.Navigation`, `.Submodule`, `.Global`):
+
+- **Navigation** (move, fold, toggle): left in the footer.
+- **Global** (`?`, `q`): right-aligned in the footer, always kept.
+- **Submodule** (act on the selected one, e.g. `c`): a palette on the last
+  line of the detail pane. It is left out if the pane is shorter than 12
+  lines. Whenever the palette isn't shown (pane hidden or too short), these
+  keys move into the footer after the navigation keys.
+
+If the footer is too narrow, keys are dropped from the left group's end
+(submodule keys first); the global keys stay. Full help (`?`) lists all keys
+in columns, whatever the size. Keys work whether or not they are shown.
+
 ### Tree row
 
 ```
@@ -191,6 +206,7 @@ colors in components.
 | `q`, `ctrl+c` | Quit |
 | `f` | Fetch all repositories (does nothing while a fetch runs) |
 | `r` | Reload everything (e.g. after editing files) |
+| `c` | Copy the absolute directory of the selected submodule to the clipboard (OSC 52, so it also works over SSH; needs terminal support, in tmux `set -g set-clipboard on`). The footer confirms with `copied <path>`. Without a local provider (mock) the path relative to the superproject is copied |
 | `u`, `b`, `/`, `!` | Planned actions (see requirements) |
 
 "First child" always means the first child **as displayed** (children are
@@ -199,6 +215,32 @@ grouped by directory).
 Collapsing an ancestor of the selection moves the selection to that ancestor.
 The view scrolls so the selection is always visible; when the first submodule
 is selected, headers above it are shown too.
+
+### Key reference
+
+Every key in the UI, where it is shown, and whether it works. Update this
+table when a key is added, moved or implemented. "Bar" is the short footer
+bar, "Palette" the detail pane's palette (the footer takes its keys over
+where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette)),
+"Help" the full help (`?`).
+
+| Key | Action | Group | Shown in | Implemented |
+|---|---|---|---|---|
+| `↑` / `k`, `↓` / `j` | Move selection | Navigation | Bar, Help | yes |
+| `←` / `h`, `→` / `l` | Fold / unfold, parent / first child | Navigation | Bar, Help | yes |
+| `H` / `⇧←`, `L` / `⇧→` | Collapse / expand all | Navigation | Bar, Help | yes |
+| `space` | Toggle expand/collapse | Navigation | Bar, Help | yes |
+| `home` / `g`, `end` / `G` | First / last submodule | Navigation | Help | yes |
+| `pgup`, `pgdn` | Move by one screen | Navigation | Help | yes |
+| `c` | Copy path | Submodule | Palette, Help | yes |
+| `u` | Checkout pin | Submodule | Help | no (flashes "not implemented") |
+| `b` | Bump pin to tip | Submodule | Help | no (flashes "not implemented") |
+| `f` | Fetch all repositories | Global | Help | yes |
+| `r` | Reload everything | Global | Help | yes |
+| `/` | Filter | Global | Help | no (flashes "not implemented") |
+| `!` | Problems only | Global | Help | no (flashes "not implemented") |
+| `?` | Toggle full help | Global | Bar, Help | yes |
+| `q`, `ctrl+c` | Quit | Global | Bar, Help | yes |
 
 ### Mouse
 

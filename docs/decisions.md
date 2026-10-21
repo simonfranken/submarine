@@ -200,3 +200,21 @@ package so versions stay clean.
 corrupt or partial downloads, not a compromised registry (no signatures).
 The update check is a deliberate, outside-the-provider network use: only
 on `update` and a once-a-day background check that can be disabled.
+
+## Copy path with `c` via OSC 52
+
+`c` copies the selected submodule's absolute directory (optional
+`submodule.Locator`; the relative path as fallback). The absolute path is
+what a shell needs (`cd <paste>`). OSC 52 instead of a clipboard tool
+(`xclip`, `pbcopy`): no external dependency and it works over SSH. The cost:
+terminals that block OSC 52 copy nothing silently; the footer still says
+`copied`, since the application can't know.
+
+## Key groups: global, navigation, submodule
+
+Keys that act on the selected submodule (copy path, later checkout, bump) are
+shown in a palette in the detail pane, next to what they act on; global keys
+(`?`, `q`) sit right in the footer. Where the pane can't show the palette
+(hidden below 90 columns, or under 12 lines) the footer shows these keys
+instead, so small terminals need no extra UI (no overlay or action menu).
+Keys never depend on what is visible.

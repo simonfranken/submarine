@@ -73,7 +73,7 @@ func New(ctx context.Context, p submodule.Provider, opts Options) Model {
 		loads:    newReloader(),
 		ticking:  true, // Init schedules the first tick
 		tree:     tree.New(t),
-		detail:   detail.New(t),
+		detail:   detail.New(t, k.Submodule()),
 		footer:   footer.New(t, k),
 		spinner:  sp,
 	}
@@ -353,12 +353,32 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.startFetch()
 	case key.Matches(msg, k.Reload):
 		return m, m.reloadTree(true)
+	case key.Matches(msg, k.Copy):
+		return m.copyPath()
 	case key.Matches(msg, k.Update, k.Bump, k.Filter, k.Issues):
 		cmd := m.footer.Flash("“" + msg.String() + "” is not implemented in the prototype")
 		m.layout()
 		return m, cmd
 	}
 	return m, nil
+}
+
+// copyPath copies the absolute directory of the selected submodule to the
+// clipboard, or its path in the superproject if the provider can't tell.
+func (m Model) copyPath() (tea.Model, tea.Cmd) {
+	s := m.tree.Selected()
+	if s == nil {
+		return m, nil
+	}
+	path := s.Path
+	if l, ok := m.provider.(submodule.Locator); ok {
+		if dir := l.Dir(s.Path); dir != "" {
+			path = dir
+		}
+	}
+	cmd := tea.Batch(copyToClipboard(path), m.footer.Flash("copied "+path))
+	m.layout()
+	return m, cmd
 }
 
 // layout distributes the terminal size among the components.
@@ -373,6 +393,7 @@ func (m *Model) layout() {
 		treeWidth = m.width - detailWidth
 		m.detail.SetSize(detailWidth-2, bodyHeight) // border + padding
 	}
+	m.footer.SetActions(!m.showDetail || !m.detail.PaletteVisible())
 	m.tree.SetSize(treeWidth, bodyHeight)
 }
 

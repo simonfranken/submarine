@@ -36,6 +36,17 @@ func (p *Provider) Fetchable(path string) bool {
 	return ok
 }
 
+// Dir returns the absolute directory of path ("" is the superproject),
+// whether or not it is initialized.
+func (p *Provider) Dir(path string) string {
+	if path == "" {
+		return p.root
+	}
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.mods[path].dir
+}
+
 // repoDir returns the worktree of path if it is initialized.
 func (p *Provider) repoDir(path string) (string, bool) {
 	if path == "" {

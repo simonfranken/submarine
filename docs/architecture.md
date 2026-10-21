@@ -31,7 +31,7 @@ internal/tui/                 Bubble Tea application
   tree/                       tree component: rows, navigation, mouse, view
   detail/                     detail pane; changes.go: change preview
   header/                     header line
-  footer/                     help and flash messages
+  footer/                     key bar (navigation left, global right) and flash messages
 ```
 
 ### Layering rules
@@ -61,6 +61,12 @@ type Fetcher interface {
 }
 type Watcher interface {
     Watch(ctx context.Context) <-chan Change   // {Path, Local, Structure}
+}
+```
+
+```go
+type Locator interface {
+    Dir(path string) string                    // absolute directory, "" if unknown
 }
 ```
 
