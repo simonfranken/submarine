@@ -36,7 +36,7 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 	}
 
 	// count submodules per issue kind (most severe first), plus staged pins
-	var total, loading, staged int
+	var total, loading, errored, staged int
 	perKind := map[submodule.IssueKind]int{}
 	level := map[submodule.IssueKind]submodule.Level{}
 	submodule.Walk(repo.Submodules, func(s *submodule.Submodule) {
@@ -44,6 +44,8 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 		if s.Status == nil {
 			if s.Err == nil {
 				loading++
+			} else {
+				errored++
 			}
 			return
 		}
@@ -58,6 +60,9 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 
 	sep := seg(t.Muted, " · ")
 	mid := seg(t.Muted, fmt.Sprintf("%d submodules", total))
+	if errored > 0 {
+		mid += sep + t.LevelStyle(submodule.LevelDanger, bar).Render(fmt.Sprintf("%d error", errored))
+	}
 	for _, k := range []submodule.IssueKind{
 		submodule.IssueUnpushed, submodule.IssueConflict, submodule.IssueMissing,
 		submodule.IssueOffPin, submodule.IssueChanged,
