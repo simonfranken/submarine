@@ -183,8 +183,8 @@ colors in components.
 | `space` | Toggle expand/collapse of the selected submodule |
 | `→` / `l` | Collapsed with children: expand and select the first child. Expanded: select the first child. Leaf: nothing |
 | `←` / `h` | Expanded: collapse it (stays selected). Otherwise: collapse the parent and select it. Top level: nothing |
-| `ctrl+→` | Expand all; then follow the first child from the selection down to a submodule without children |
-| `ctrl+←` | Collapse all (resets remembered expansion); select the top-level ancestor |
+| `L` / `ctrl+→` | Expand all; then follow the first child from the selection down to a submodule without children |
+| `H` / `ctrl+←` | Collapse all (resets remembered expansion); select the top-level ancestor |
 | `home` / `g`, `end` / `G` | First / last submodule |
 | `pgup`, `pgdn` | Move by one screen |
 | `?` | Toggle full help |
@@ -209,5 +209,6 @@ is selected, headers above it are shown too.
 ## Accessibility and terminals
 
 - `SUBMARINE_ASCII=1`: ASCII symbols (`^ v > v . *`) instead of Unicode.
-- Some terminals or multiplexers capture `ctrl+←/→`; letter aliases can be
-  added if needed.
+- Many setups capture `ctrl+←/→` (macOS Mission Control, some terminals and
+  multiplexers), so expand/collapse all also work as `L` / `H`, the shifted
+  vim keys for `→` / `←`.
