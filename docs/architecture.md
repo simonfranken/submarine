@@ -21,6 +21,7 @@ internal/submodule/git/       provider using the git CLI (reads, fetch, watch)
   watch.go                    Watch: polls git metadata for changes
   gitdir.go                   resolves .git dirs and gitdir: files
 internal/submodule/mock/      fixture provider with artificial latency
+internal/update/              self-update from the package registry; NO UI imports
 internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
   keys.go                     key bindings (also feed the help view)
@@ -166,6 +167,32 @@ Fetch (network) ──writes refs──▶ .git/…  ◀──writes refs── 
 - Widths are measured with `lipgloss.Width`; truncation uses
   `ansi.Truncate`, which keeps escape sequences and bubblezone markers intact.
 - `zone.Scan` runs once, on the root view.
+
+## Distribution
+
+No CI runner: releases are built and published from a developer machine.
+
+- `make dist` cross-compiles `CGO_ENABLED=0` binaries for linux/darwin ×
+  amd64/arm64 into `dist/` plus `checksums.txt`; the version comes from
+  `git describe` and is baked in with `-X main.version`.
+- `make release` with `GITEA_TOKEN` set, e.g. in `.env` (copy `.env.template`; token needs `write:package`; HEAD must be a
+  clean `vX.Y.Z` tag) runs tests, builds and uploads to the Gitea generic
+  registry `https://git.simon-franken.de/api/packages/simonfranken/generic`:
+  - `submarine/<version>/submarine_<os>_<arch>` and `checksums.txt`
+  - `submarine-latest/latest/VERSION`, replaced **last**, so a failed upload
+    never advertises a broken version.
+- `install.sh` (`curl -fsSL …/raw/branch/main/install.sh | sh`) detects
+  OS/arch, verifies the sha256, installs `submarine` and a `sub` symlink to
+  `~/.local/bin` (`SUBMARINE_INSTALL_DIR`, `SUBMARINE_VERSION`,
+  `SUBMARINE_BASE_URL` override).
+- `submarine update [--check] [--force]` (package `internal/update`) reads
+  `VERSION`, downloads the asset for the running platform, verifies the
+  checksum and atomically replaces the real executable (symlinks resolved,
+  so `sub` works too). `SUBMARINE_UPDATE_URL` overrides the registry.
+- After the TUI exits, a one-line notice is printed if a newer release
+  exists. The check runs in the background at startup, at most once a day
+  (cached in the user cache dir) and is off for dev builds, `--no-fetch`,
+  `--mock` and `SUBMARINE_NO_UPDATE_CHECK=1`.
 
 ## Testing
 

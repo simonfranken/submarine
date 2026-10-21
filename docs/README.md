@@ -15,6 +15,16 @@ bare commit hash.
 | [architecture.md](architecture.md) | Package layout, the provider boundary, async loading, testing |
 | [decisions.md](decisions.md) | Decision log with rationale (ADR style) |
 
+## Install
+
+```sh
+curl -fsSL https://git.simon-franken.de/simonfranken/submarine/raw/branch/main/install.sh | sh
+```
+
+Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
+`~/.local/bin`. Update with `submarine update`. Maintainers publish with
+`GITEA_TOKEN=… make release` (see [architecture](architecture.md#distribution)).
+
 ## Status
 
 **Prototype.** The UI is complete for browsing. It reads real repositories

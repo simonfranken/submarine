@@ -183,3 +183,18 @@ once per submodule at a time and coalesce bursts.
 **Consequences.** One mechanism to test and trust. After our fetch the
 data updates up to one poll interval later; the header shows "fetched just
 now" right away.
+
+## D21 — Distribution: local build, Gitea generic registry, curl | sh
+
+**Decision.** Releases are built locally with `make` and uploaded with an
+access token to the Gitea generic package registry. Installation is a
+POSIX `install.sh`; `sub` is a symlink to `submarine`. Updates are
+`submarine update`, driven by a `latest/VERSION` pointer file.
+**Rationale.** The Gitea instance has no working runner. The generic
+registry needs no extra hosting and is publicly readable. A symlink keeps
+one binary to update. The pointer is uploaded last and lives in its own
+package so versions stay clean.
+**Consequences.** Integrity is a sha256 from the same host: it catches
+corrupt or partial downloads, not a compromised registry (no signatures).
+The update check is a deliberate, outside-the-provider network use: only
+on `update` and a once-a-day background check that can be disabled.

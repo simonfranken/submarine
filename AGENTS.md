@@ -22,6 +22,8 @@ go run ./cmd/submarine [dir]  # run on a repository (default: cwd)
 go run ./cmd/submarine --mock # run on mock data
 go run ./cmd/submarine --no-fetch [dir]  # without background fetch
 scripts/make-fixture.sh DIR   # build a test superproject in DIR
+make dist                     # cross-compile into dist/
+GITEA_TOKEN=… make release    # publish a tagged release (outward-facing)
 go vet ./...
 go test ./...
 gofmt -l .                    # must print nothing
