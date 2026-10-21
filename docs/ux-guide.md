@@ -72,7 +72,9 @@ indent ▸ name [n]   status          ref             delta
 `path  branch ↑↓ · n submodules · <count> <issue>… · n pin staged · n loading · fetched <age>`
 
 Issue counts are ordered by severity (unpushed, conflict, missing, off pin,
-changed), each in its level color. Zero counts are omitted.
+changed), each in its level color. Zero counts are omitted. `<age>` is
+`never` if the superproject has never been fetched; a detached superproject
+shows `(detached)` as its branch.
 
 ## Colors
 

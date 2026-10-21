@@ -88,6 +88,13 @@ commit hashes. It doesn't answer the questions users actually have:
 | `/` | Filter by name/path |
 | `!` | Show only submodules with issues |
 
+## Usage
+
+```sh
+submarine [dir]     # the repository containing dir (default: current directory)
+submarine --mock    # built-in mock data
+```
+
 ## Non-functional requirements
 
 - **N1** Startup must not block on the network. The tool works from local
@@ -100,5 +107,7 @@ commit hashes. It doesn't answer the questions users actually have:
 - **N5** Works without a Nerd Font. `SUBMARINE_ASCII=1` replaces the few
   remaining Unicode symbols with ASCII.
 - **N6** Works in narrow terminals (detail pane hides below 90 columns).
-- **N7** The UI is independent of the data source: replacing the mock
-  provider with a git provider requires no UI changes.
+- **N7** The UI is independent of the data source: the mock and the git
+  provider are interchangeable without UI changes.
+- **N8** The git provider is read-only and never uses the network; it uses
+  the `git` command line, so the user's git configuration applies.

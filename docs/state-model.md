@@ -9,7 +9,7 @@ them.
 
 | Commit | Source |
 |---|---|
-| **Pinned** | The gitlink recorded in the superproject (HEAD or index) |
+| **Pinned** | The gitlink recorded in the superproject index (differs from HEAD → `PinStaged`) |
 | **Checked out** | The submodule's `HEAD` |
 | **Tip** | The tip of the ref the pin was resolved to, e.g. `origin/main` |
 
@@ -96,6 +96,38 @@ Distances: `git rev-list --left-right --count <pin>...<ref>` gives
 `Pushed` is true if the pin is reachable from any remote ref. A pin that is
 ahead of its ref can still be pushed (e.g. on another branch); only
 `Pushed == false` is dangerous.
+
+## Git commands
+
+How the git provider (`internal/submodule/git`) fills `Status`. All commands
+are local; `<pin>` is the index gitlink.
+
+| Field | Command (in the parent repo / in the submodule) |
+|---|---|
+| `Pinned`, `PinStaged` | parent: `ls-files -s -- <path>` vs `ls-tree HEAD -- <path>` |
+| `Presence` | directory missing → `DirMissing`; no `.git` in it → `NotInitialized` |
+| `Checkout` | `rev-parse HEAD`, `symbolic-ref -q HEAD` (no branch → detached) |
+| `Worktree` | `status --porcelain=v2 --ignore-submodules=dirty` |
+| `Pushed` | `for-each-ref --contains <pin> refs/remotes` is not empty |
+| `Pin.Ref` | rules above; the remote is `origin`, else the first remote |
+| `Ahead`, `Behind` | `rev-list --left-right --count <pin>...<ref>` |
+| `Between` | `log <pin>...<ref>`, at most 50 commits |
+
+Details:
+
+- Rule 1: `branch = .` means the superproject's current branch. The rule
+  applies only if `<remote>/<branch>` exists locally.
+- Rule 2 uses the checked-out branch's upstream (`<branch>@{upstream}`).
+- Rule 4 compares at most 16 containing branches (oldest tip first) and
+  picks the one with the fewest commits after the pin.
+- Rule 6 shows the short SHA; there is no tip and no distance.
+- `--ignore-submodules=dirty`: changes inside a nested submodule do not make
+  its parent `changed` (D7), but a moved nested pin does.
+- A missing submodule only gets a `Pinned` SHA; nested submodules of an
+  uninitialized submodule are unknown and not shown.
+- If the pinned commit doesn't exist in the submodule (not fetched), loading
+  fails with "pinned commit … not fetched" (shown as `error`) instead of
+  guessing `unpushed`.
 
 ## Distance notation
 

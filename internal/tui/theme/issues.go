@@ -55,8 +55,11 @@ func (t Theme) Delta(p submodule.PinInfo, base lipgloss.Style) string {
 	return s
 }
 
-// Ago formats a time relative to now, e.g. "5m ago".
+// Ago formats a time relative to now, e.g. "5m ago"; the zero time is "never".
 func Ago(t time.Time) string {
+	if t.IsZero() {
+		return "never"
+	}
 	d := time.Since(t)
 	switch {
 	case d < time.Minute:

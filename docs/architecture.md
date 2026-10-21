@@ -8,11 +8,15 @@ Go, [Bubble Tea](https://github.com/charmbracelet/bubbletea) (v1),
 ## Package layout
 
 ```
-cmd/submarine/main.go         wiring: choose provider (--mock), start the program
+cmd/submarine/main.go         wiring: choose provider (git or --mock), start the program
 internal/submodule/           domain model; NO UI imports
   model.go                    Repo, Submodule, Status, PinInfo, Commit, enums
   status.go                   Issues(), HiddenIssues(), Walk()
   provider.go                 Provider interface
+internal/submodule/git/       read-only provider using the git CLI
+  exec.go                     git runner (environment, errors)
+  parse.go                    pure parsers for git output
+  provider.go                 Tree, Status, pin → ref resolution
 internal/submodule/mock/      fixture provider with artificial latency
 internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
@@ -51,6 +55,23 @@ type Provider interface {
 
 The mock provider (`internal/submodule/mock`) covers every state and sleeps
 100–800 ms per `Status` call to exercise the loading path.
+
+### Git provider
+
+`internal/submodule/git` shells out to `git -C <dir> …` (see D14).
+
+- Environment: `GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0` (reads never
+  take `index.lock`), `LC_ALL=C`. No command touches the network.
+- `Tree` reads each repository's `.gitmodules` (`git config -f
+  .gitmodules`) and recurses into initialized submodules. It records, per
+  path, the parent repository and the `.gitmodules` branch for `Status`.
+  `Name` is the last element of `RelPath`.
+- `Status` runs about ten small git commands per submodule (see
+  [state-model.md](state-model.md#git-commands)). At most `runtime.NumCPU()`
+  `Status` calls run at once; the others wait on a semaphore and still
+  respect `ctx` (D16).
+- Superproject: branch from `symbolic-ref`, ahead/behind against
+  `@{upstream}`, "fetched" from the mtime of `FETCH_HEAD`.
 
 ## Loading flow
 
@@ -91,14 +112,18 @@ go test ./...
 ```
 
 - `internal/submodule`: issue classification and hidden-issue aggregation.
+- `internal/submodule/git`: parser unit tests, and integration tests
+  against a fixture repository built by `scripts/make-fixture.sh` (skipped
+  if `git` is not installed).
 - `internal/tui/tree`: navigation rules. Tests need `zone.NewGlobal()` (see
   `TestMain`).
 
 Manual check in a headless terminal:
 
 ```sh
+scripts/make-fixture.sh /tmp/subfix   # superproject with every state
 go build -o /tmp/submarine ./cmd/submarine
-tmux new-session -d -s sub -x 130 -y 24 /tmp/submarine
+tmux new-session -d -s sub -x 130 -y 24 "/tmp/submarine /tmp/subfix/super"
 tmux send-keys -t sub Down Right
 tmux capture-pane -pt sub        # add -e to see colors
 tmux kill-session -t sub

@@ -12,20 +12,37 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"submarine/internal/submodule"
+	"submarine/internal/submodule/git"
 	"submarine/internal/submodule/mock"
 	"submarine/internal/tui"
 )
 
 func main() {
-	useMock := flag.Bool("mock", true, "use built-in mock data instead of a real repository")
+	useMock := flag.Bool("mock", false, "use built-in mock data instead of a real repository")
+	flag.Usage = func() {
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: submarine [--mock] [dir]")
+		flag.PrintDefaults()
+	}
 	flag.Parse()
+	if flag.NArg() > 1 {
+		flag.Usage()
+		os.Exit(2)
+	}
 
 	var provider submodule.Provider
 	if *useMock {
 		provider = mock.New()
 	} else {
-		fmt.Fprintln(os.Stderr, "only --mock is supported in the prototype")
-		os.Exit(2)
+		dir := "."
+		if flag.NArg() == 1 {
+			dir = flag.Arg(0)
+		}
+		p, err := git.New(dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "submarine:", err)
+			os.Exit(2)
+		}
+		provider = p
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

@@ -99,3 +99,32 @@ explicit action (`f`).
 
 **Decision.** Keep mouse support (click to select/toggle, wheel to move)
 using bubblezone markers per row.
+
+## D14 — Git provider shells out to the git CLI
+
+**Context.** The provider can use a Go library (go-git) or the `git` binary.
+**Decision.** Run `git -C <dir> …` with a fixed environment
+(`GIT_TERMINAL_PROMPT=0`, `GIT_OPTIONAL_LOCKS=0`, `LC_ALL=C`) and parse
+stable output formats (`--porcelain=v2`, custom `--format`).
+**Consequences.** Behaves exactly like the user's git (config, `gitdir:`
+files, worktrees, partial clones), no new dependency, fast on large repos.
+Requires `git` on `PATH`; one process per query.
+
+## D15 — Git provider semantics
+
+**Decision.** The pin is the **index** gitlink, because that is what the
+next commit records and what `submodule update` checks out; a difference to
+HEAD is `PinStaged`. Worktree state uses `--ignore-submodules=dirty`, so dirt
+in a nested submodule doesn't mark its parent (consistent with D7). A pin
+whose commit isn't present locally is a loading `error`, not `unpushed`,
+because without the commit nothing can be said about it.
+`--mock` is no longer the default; `submarine [dir]` reads a real repository.
+
+## D16 — Bounded concurrency inside the provider
+
+**Context.** The app starts one `Status` command per submodule at once
+(D11); with hundreds of submodules that would spawn thousands of git
+processes.
+**Decision.** The git provider limits concurrent `Status` calls to
+`runtime.NumCPU()` with a semaphore that respects `ctx`.
+**Consequences.** The UI stays unchanged; rows fill in steadily.
