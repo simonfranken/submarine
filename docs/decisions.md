@@ -63,7 +63,7 @@ do **not** mark the parent itself as `changed`.
 
 **Decision.** Only the first level is visible. `→` expands and enters the
 first child, `←` collapses and goes to the parent, `space` toggles,
-`L`/`H` (or `ctrl+→/←`) expand/collapse all (see [ux-guide.md](ux-guide.md#navigation)).
+`shift+→/←`, `L`/`H` (or `ctrl+→/←`) expand/collapse all (see [ux-guide.md](ux-guide.md#navigation)).
 `←` on an expanded node collapses it in place, so a node can be closed
 without leaving it. Remembered expansion is kept on collapse, but reset by
 "collapse all".

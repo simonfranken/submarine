@@ -17,8 +17,8 @@ func defaultKeys() keyMap {
 		Left:        key.NewBinding(key.WithKeys("left", "h"), key.WithHelp("←/h", "collapse, parent")),
 		Right:       key.NewBinding(key.WithKeys("right", "l"), key.WithHelp("→/l", "expand, first child")),
 		Toggle:      key.NewBinding(key.WithKeys(" "), key.WithHelp("space", "toggle")),
-		CollapseAll: key.NewBinding(key.WithKeys("ctrl+left", "H"), key.WithHelp("H/ctrl+←", "collapse all")),
-		ExpandAll:   key.NewBinding(key.WithKeys("ctrl+right", "L"), key.WithHelp("L/ctrl+→", "expand all")),
+		CollapseAll: key.NewBinding(key.WithKeys("shift+left", "ctrl+left", "H"), key.WithHelp("H/⇧←", "collapse all")),
+		ExpandAll:   key.NewBinding(key.WithKeys("shift+right", "ctrl+right", "L"), key.WithHelp("L/⇧→", "expand all")),
 		Home:        key.NewBinding(key.WithKeys("home", "g"), key.WithHelp("home/g", "first")),
 		End:         key.NewBinding(key.WithKeys("end", "G"), key.WithHelp("end/G", "last")),
 		PageUp:      key.NewBinding(key.WithKeys("pgup"), key.WithHelp("pgup", "page up")),
@@ -37,7 +37,7 @@ func defaultKeys() keyMap {
 func (k keyMap) ShortHelp() []key.Binding {
 	move := key.NewBinding(key.WithKeys("up"), key.WithHelp("↑↓/jk", "move"))
 	fold := key.NewBinding(key.WithKeys("left"), key.WithHelp("←→/hl", "fold"))
-	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("H/L", "fold all"))
+	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("⇧←→/HL", "fold all"))
 	return []key.Binding{move, fold, all, k.Toggle, k.Help, k.Quit}
 }
 

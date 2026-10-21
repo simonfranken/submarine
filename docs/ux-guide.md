@@ -26,7 +26,7 @@
      my_submodule_3       unpushed       origin/main    ↑1               │ Pinned    b7c8d9e Hotfix null pointer
  libs/                                                                   │ Checkout  b7c8d9e Hotfix null pointer
      logging                             origin/main    ↓3               │ Tip       6f5e4d3 Release 2.1.0
- ↑↓/jk move • ←→/hl fold • H/L fold all • space toggle • ? help • q quit
+ ↑↓/jk move • ←→/hl fold • ⇧←→/HL fold all • space toggle • ? help • q quit
 ```
 
 | Area | Height / width |
@@ -183,8 +183,8 @@ colors in components.
 | `space` | Toggle expand/collapse of the selected submodule |
 | `→` / `l` | Collapsed with children: expand and select the first child. Expanded: select the first child. Leaf: nothing |
 | `←` / `h` | Expanded: collapse it (stays selected). Otherwise: collapse the parent and select it. Top level: nothing |
-| `L` / `ctrl+→` | Expand all; then follow the first child from the selection down to a submodule without children |
-| `H` / `ctrl+←` | Collapse all (resets remembered expansion); select the top-level ancestor |
+| `L` / `shift+→` / `ctrl+→` | Expand all; then follow the first child from the selection down to a submodule without children |
+| `H` / `shift+←` / `ctrl+←` | Collapse all (resets remembered expansion); select the top-level ancestor |
 | `home` / `g`, `end` / `G` | First / last submodule |
 | `pgup`, `pgdn` | Move by one screen |
 | `?` | Toggle full help |
@@ -210,5 +210,5 @@ is selected, headers above it are shown too.
 
 - `SUBMARINE_ASCII=1`: ASCII symbols (`^ v > v . *`) instead of Unicode.
 - Many setups capture `ctrl+←/→` (macOS Mission Control, some terminals and
-  multiplexers), so expand/collapse all also work as `L` / `H`, the shifted
-  vim keys for `→` / `←`.
+  multiplexers), so expand/collapse all also work as `shift+→/←` and as `L` / `H`, the
+  shifted vim keys for `→` / `←` (for terminals that don't report shift+arrows).
