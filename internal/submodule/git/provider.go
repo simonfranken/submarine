@@ -158,7 +158,7 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 	}
 	pin := parseGitlink(out)
 	if pin == "" {
-		return nil, errors.New("no gitlink in the superproject index")
+		return nil, errors.New("listed in .gitmodules, but has no gitlink in the superproject index (stale entry?)")
 	}
 	out, _, err = try(ctx, in.superDir, "ls-tree", "HEAD", "--", in.relPath)
 	if err != nil {

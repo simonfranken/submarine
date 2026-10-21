@@ -121,7 +121,9 @@ Changes   5 files · 2M 1A 1D 1R · +37 −12
 `path  branch ↑↓ · n submodules · <count> <issue>… · n pin staged · n loading · <fetch>`
 
 Issue counts are ordered by severity (unpushed, conflict, missing, off pin,
-changed), each in its level color. Zero counts are omitted. A detached
+changed), each in its level color. Zero counts are omitted. `n loading`
+counts only submodules whose status is still being loaded; ones whose load
+failed (shown as `error`) are not counted. A detached
 superproject shows `(detached)` as its branch.
 
 `<fetch>` on the right:

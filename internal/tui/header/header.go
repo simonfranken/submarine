@@ -42,7 +42,9 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 	submodule.Walk(repo.Submodules, func(s *submodule.Submodule) {
 		total++
 		if s.Status == nil {
-			loading++
+			if s.Err == nil {
+				loading++
+			}
 			return
 		}
 		if s.Status.PinStaged {
