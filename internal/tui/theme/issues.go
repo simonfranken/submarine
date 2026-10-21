@@ -9,6 +9,9 @@ import (
 	"submarine/internal/submodule"
 )
 
+// InSync is the word for a submodule without issues.
+const InSync = "in sync"
+
 // IssueWord is the short label for an issue kind shown in the tree.
 func IssueWord(k submodule.IssueKind) string {
 	switch k {

@@ -398,7 +398,8 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 	name := ansi.Truncate(s.Name, max(nameW-len(count), 1), "…")
 	nameCell := seg(textColor, name) + seg(t.Muted, count) + pad(nameW-lipgloss.Width(name+count))
 
-	// status: the most severe issue as a word, "+n" for further issues
+	// status: the most severe issue as a word, "+n" for further issues;
+	// a muted "in sync" without issues, so an empty cell never looks broken
 	var status string
 	switch {
 	case s.Err != nil:
@@ -410,6 +411,8 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 		if len(issues) > 1 {
 			status += seg(t.Muted, fmt.Sprintf(" +%d", len(issues)-1))
 		}
+	default:
+		status = seg(t.Muted, theme.InSync)
 	}
 	if k, worst := s.HiddenIssues(); collapsed && k > 0 {
 		if status != "" {

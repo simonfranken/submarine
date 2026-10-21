@@ -74,7 +74,7 @@ func (m Model) lines(s *submodule.Submodule) []string {
 		out = append(out, t.LevelStyle(is.Level, lipgloss.NewStyle()).Width(labelWidth).Render(theme.IssueWord(is.Kind))+text.Render(is.Detail))
 	}
 	if len(issues) == 0 {
-		out = append(out, label("in sync")+muted.Render("nothing to do"))
+		out = append(out, label(theme.InSync)+muted.Render("nothing to do"))
 	}
 	if st.PinStaged {
 		out = append(out, theme.Fg(t.Info).Width(labelWidth).Render("staged")+text.Render("pin change staged, not committed"))

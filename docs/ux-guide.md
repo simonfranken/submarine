@@ -47,13 +47,15 @@ indent ▸ name [n]   status          ref             delta
 | indent | 2 per depth | |
 | toggle | 3 | `▸` collapsed, `▾` expanded, blank for leaves |
 | name | fits the widest visible name | name, `[n]` = direct children (collapsed only) |
-| status | 14 | issue word, `+n`, `·k` hidden issues; spinner while loading |
+| status | 14 | issue word, `+n`, `·k` hidden issues; muted `in sync` without issues; spinner while loading |
 | ref | widest ref, max 22 | resolved ref; muted short SHA if unresolved |
 | delta | 6 | `↑n`, `↓n`, `↑n↓m` |
 
 - The name column is only as wide as needed, so states stay close to names.
 - Directory headers (`src/`, `modules/`) are muted and not selectable.
-- Rows without issues: name and ref muted (except the selected row).
+- Rows without issues: name and ref muted (except the selected row), status
+  `in sync` in muted grey. An empty status cell would look like missing
+  data; the muted word confirms the check ran without drawing attention.
 
 ### Detail pane
 

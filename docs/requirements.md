@@ -42,7 +42,8 @@ commit hashes. It doesn't answer the questions users actually have:
 ### State per submodule
 
 - **F10** Each submodule shows at most **one** state word: the most severe
-  issue, plus `+n` if there are more. Submodules without issues show no word.
+  issue, plus `+n` if there are more. Submodules without issues show a
+  muted `in sync`.
   See [state-model.md](state-model.md) for the full rules.
 - **F11** Each submodule shows its pin as a ref (`origin/main`, a tag, or a
   short SHA as a fallback) and the distance to that ref (`↑n`, `↓n`, `↑n↓m`).
