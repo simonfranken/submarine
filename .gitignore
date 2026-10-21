@@ -8,6 +8,9 @@
 *.so
 *.dylib
 
+# Delve build output
+__debug_bin*
+
 # Test and coverage output
 *.test
 *.out
