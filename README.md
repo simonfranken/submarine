@@ -111,6 +111,7 @@ files.
 | `/` | Filter |
 | `!` | Problems only |
 | `c` | Copy path |
+| `x` | Restore: make the worktree exactly what git records (asks if work would be lost) |
 | `f` / `r` | Fetch / reload |
 | `?` | Full help |
 | `q` | Quit |
@@ -119,8 +120,9 @@ The mouse works too: click to select, click `▸` to toggle, wheel to move.
 
 ## Status
 
-A prototype. Browsing is complete and read-only; write actions (restore,
-stage pin) are being specified in [docs/actions.md](docs/actions.md).
+A prototype. Browsing is complete, and `x` restores a submodule or the whole
+superproject. More write actions (stage pin) are being specified in
+[docs/actions.md](docs/actions.md).
 
 ## Documentation
 

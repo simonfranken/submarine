@@ -313,3 +313,30 @@ side effect of switching off the update check; that has
 fresh as the last fetch. `fetched never` appears for a repository that was
 never fetched. The progress display and per-submodule fetch errors stay as
 they are, they now belong to `f`.
+
+## D23 — Restore: exact worktree, asks only for losses, may fetch what is missing
+
+**Context.** The first write action had to give "the exact version of the
+project my root commit specifies" in one key, without destroying work by
+accident.
+**Decision.** `x` restores the selection: reset to the target (HEAD for the
+superproject, the index gitlink for a submodule, so a staged pin is kept and
+used), remove untracked files and repositories, end merges/rebases, and do
+the same for every submodule of the target tree, initializing missing ones.
+- *Ignored files stay* (`clean` without `-x`): `.env`, `node_modules` and
+  IDE settings are not "additional files" worth deleting in every submodule.
+- *Branches never move.* A checkout that is not on the target is detached
+  first, so commits stay on their branch.
+- *It asks only if something is lost* (changed or untracked files,
+  operations in progress, commits on no ref, standalone repositories).
+  Never asking would delete repositories that exist nowhere else; always
+  asking would train a reflexive `y` on the harmless cases. The loss is read
+  from the disk when the key is pressed, not from the loaded statuses.
+- *Network.* Supersedes the "network only in `Fetch`" rule (N8): restore may
+  clone a missing submodule and fetch a missing commit, non-interactively and
+  with a timeout, because "no child module missing" cannot be met offline.
+- Key `x`, not `R`, which sits next to `r` (reload).
+**Consequences.** `Restorer` is a new optional provider interface; the mock
+does not implement it. Restore is idempotent and can be repeated after a
+failure. It takes the time of its slowest clone; there is no per-repository
+progress yet.

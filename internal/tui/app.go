@@ -56,6 +56,9 @@ type Model struct {
 	// exactly then. The input is focused while typing and blurred after enter.
 	filtering bool
 
+	restore *restoreState // the restore in progress, nil if none
+	notice  string        // an error to show above the footer until the next key
+
 	width, height int
 	showDetail    bool
 }
@@ -156,7 +159,7 @@ func (m *Model) startFetch() tea.Cmd {
 
 // busy reports whether something shows a spinner.
 func (m Model) busy() bool {
-	if m.repo == nil || m.fetch.Running {
+	if m.repo == nil || m.fetch.Running || (m.restore != nil && m.restore.phase != restoreAsking) {
 		return true
 	}
 	loading := m.repo.Root != nil && m.repo.Root.Status == nil && m.repo.Root.Err == nil
@@ -201,6 +204,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case changeMsg:
 		return m.changed(msg)
+
+	case lossMsg:
+		return m.lossChecked(msg)
+
+	case restoreDoneMsg:
+		return m.restoreDone(msg)
 
 	case fetchDoneMsg:
 		m.fetch.Done++
@@ -322,6 +331,13 @@ func (m Model) changed(msg changeMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := m.keys
+	if m.restore != nil && m.restore.phase == restoreAsking {
+		return m.answerRestore(msg)
+	}
+	if m.notice != "" {
+		m.notice = ""
+		m.layout()
+	}
 	if m.filter.Focused() {
 		return m.typeFilter(msg)
 	}
@@ -377,6 +393,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 		m.layout()
 		return m, m.filter.Focus()
+	case key.Matches(msg, k.Restore):
+		return m.startRestore()
 	case key.Matches(msg, k.Issues):
 		m.tree.SetProblemsOnly(!m.tree.ProblemsOnly())
 		m.layout()
@@ -438,9 +456,12 @@ func (m Model) filterView() string {
 	return lipgloss.NewStyle().Width(m.width).Padding(0, 1).Render(in + strings.Repeat(" ", gap) + hint)
 }
 
-// extraLine reports whether a line above the footer is shown: the filter, or
-// the notice that only problems are shown.
-func (m Model) extraLine() bool { return m.filtering || m.tree.ProblemsOnly() }
+// extraLine reports whether a line above the footer is shown: a restore in
+// progress, a failure, the filter, or the notice that only problems are
+// shown.
+func (m Model) extraLine() bool {
+	return m.filtering || m.tree.ProblemsOnly() || m.restore != nil || m.notice != ""
+}
 
 // problemsView is the line above the footer while only problems are shown, so
 // a short list is not mistaken for a healthy repository.
@@ -512,7 +533,11 @@ func (m Model) View() string {
 
 	head := header.View(m.theme, m.repo, m.fetch, m.spinner.View(), m.width, m.tree.RootSelected())
 	parts := []string{zone.Mark(m.tree.RootZone(), head), body}
-	if m.filtering {
+	if m.restore != nil {
+		parts = append(parts, m.restoreView())
+	} else if m.notice != "" {
+		parts = append(parts, m.noticeView())
+	} else if m.filtering {
 		parts = append(parts, m.filterView())
 	} else if m.tree.ProblemsOnly() {
 		parts = append(parts, m.problemsView())

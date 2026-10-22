@@ -221,6 +221,7 @@ colors in components.
 | `c` | Copy the absolute directory of the selected submodule to the clipboard (OSC 52, so it also works over SSH; needs terminal support, in tmux `set -g set-clipboard on`). The footer confirms with `copied <path>`. Without a local provider (mock) the path relative to the superproject is copied |
 | `/` | Open the filter, see [Filter](#filter) |
 | `!` | Toggle problems only, see [Problems only](#problems-only) |
+| `x` | Restore the selection, see [Restore](#restore) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).
@@ -273,6 +274,24 @@ the term*.
   previous one. The superproject stays selectable.
 - The header counts are not filtered.
 
+### Restore
+
+`x` makes the selection, and everything below it, exactly what git records
+(see [actions.md](actions.md#restore)). It uses the line above the footer:
+
+| Phase | Line |
+|---|---|
+| reading what is lost | spinner, muted `checking src/app…` |
+| something would be lost | yellow `Restore src/app?`, red `Discards 7 changed files in 3 repositories, 2 commits on no branch, 1 untracked repository.`, right-aligned `y restore · n cancel` |
+| running | spinner, yellow `restoring src/app…` |
+| failed | red `restore of src/app failed: <git's message>`, until the next key |
+
+`y` restores, any other key cancels; the keys are not passed on while the
+question is open. Without a loss there is no question. Success flashes
+`restored src/app` in the footer. For the header the name is `the
+superproject`. This line takes precedence over the filter line and the
+problems-only notice.
+
 ### Key reference
 
 Every key in the UI, where it is shown. Update this
@@ -290,6 +309,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `home` / `g`, `end` / `G` | Header / last submodule | Navigation | Help |
 | `pgup`, `pgdn` | Move by one screen | Navigation | Help |
 | `c` | Copy path | Submodule | Palette, Help |
+| `x` | Restore | Submodule | Palette, Help |
 | `f` | Fetch all repositories | Global | Help |
 | `r` | Reload everything | Global | Help |
 | `/` | Filter | Global | Help |

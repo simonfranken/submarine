@@ -1,10 +1,8 @@
 # Actions (draft)
 
-**Status: draft, not implemented.** The spec for the first two write actions.
-Open questions are listed [at the end](#open-questions). Once they are
-answered, the decisions go into [decisions.md](decisions.md), and
-[requirements.md](requirements.md) and [ux-guide.md](ux-guide.md) are
-updated.
+**Status:** [Restore](#restore) is implemented (key `x`, decisions in
+[D23](decisions.md)). [Stage pin](#stage-pin) is still a draft; its open
+questions are [at the end](#open-questions).
 
 ## Principle
 
@@ -12,9 +10,9 @@ Offer as few actions as possible, but enough to work with submodules.
 submarine shows what differs from what git records. The actions resolve such
 a difference in one of two directions:
 
-| Action | Direction | Key (proposed) |
+| Action | Direction | Key |
 |---|---|---|
-| [Restore](#restore) | The worktree follows the recorded state | `u` |
+| [Restore](#restore) | The worktree follows the recorded state | `x` |
 | [Stage pin](#stage-pin) | The recorded state follows the worktree | `s` |
 
 There is nothing else for now. Committing, pushing, switching branches and
@@ -39,7 +37,7 @@ current root commit specifies.
 Restoring the superproject resets its index too, so **staged pins are
 discarded**: afterwards every pin is the one in `HEAD`. Restoring a submodule
 does not touch the parent's index, so a staged pin of that submodule stays
-and is the target. (See open question 2.)
+and is the target.
 
 ### Postconditions
 
@@ -51,7 +49,7 @@ After a successful restore of repository R with target T:
    revert.
 3. **No untracked files or directories** remain in R. This includes leftover
    directories of submodules that T no longer has (*untracked repository*).
-   Ignored files are kept (see open question 1).
+   Ignored files are kept.
 4. **Every submodule that T records is present and initialized**, even if
    it was never initialized, is inactive (`submodule.<name>.active`) or has
    `update = none / merge / rebase` configured. Its URL comes from T's
@@ -94,75 +92,77 @@ absorbed submodule git directories stay.
 
 ### Confirmation
 
-- **Nothing would be lost** (only `off pin`, `missing`, a staged pin of the
-  root): restore runs at once, without a question.
-- **Something would be lost:** a confirmation line opens above the footer,
-  like the filter line. It says what is discarded, summed over the subtree:
+Restore asks **only if something would be lost**. Never asking is unsafe
+(`git clean -ff` deletes repositories that exist nowhere else, and nothing
+undoes a restore); always asking puts a question on the harmless, common
+cases (`off pin`, `missing`, a staged pin) and teaches a reflexive `y`.
+
+- **Nothing would be lost:** restore runs at once.
+- **Something would be lost:** a line above the footer says what is
+  discarded, summed over the whole subtree on disk:
 
   ```
-  Restore src/app? Discards 7 changed files in 3 submodules, 2 detached commits, 1 repository.   y restore · n cancel
+  Restore src/app? Discards 7 changed files in 3 repositories, 2 commits on no branch, 1 untracked repository.   y restore · n cancel
   ```
 
-  `y` runs it. `n`, `esc` or any other key cancels.
-- **The state is not fully known** (a status in the subtree is still
-  loading or failed to load): the line says so (`… · 2 submodules not
-  loaded`) and needs the same `y`. Restore does not wait for the loading.
-- Lost repositories and commits are shown in the Danger color, files in
-  Warn.
+  `y` runs it, any other key cancels.
+- **The state can't be read** for a repository: it is counted as `n
+  repositories of unknown state` and needs the same `y`.
 
-The summary only covers the submodules that are loaded. Children of a
-submodule that is not initialized are unknown. They are created fresh, so
-nothing of them can be lost.
+The check reads the disk at the moment of the keypress (`RestoreLoss`), not
+the loaded statuses, so loading or stale statuses don't matter. Nothing is
+lost that is not in the table above; ignored files are never touched.
 
 ### Network
 
-A restore may need objects that are not on disk:
-
-- a submodule that was never cloned (`not initialized`, no git directory in
-  `.git/modules`);
-- a target commit that was never fetched.
-
-Proposal: **restore may clone and fetch, but only for objects that are
-missing**, and never prompts (`GIT_TERMINAL_PROMPT=0`, as for `Fetch`).
-This changes the rule "the provider uses the network only in `Fetch`"
-(AGENTS.md, N8). The alternative is to fail with "pinned commit … not
-fetched" and leave cloning to the user (open question 3).
+A restore may need objects that are not on disk: a submodule that was never
+cloned (no git directory in `.git/modules`), or a target commit that was
+never fetched. **Restore may clone and fetch, but only what is missing**,
+non-interactively (`GIT_TERMINAL_PROMPT=0`, ssh `BatchMode`) and with a
+timeout. If the commit is on no remote, restore fails with `commit … is not
+available on any remote`. This is the one place besides `f` that uses the
+network (decision D23).
 
 ### Running, progress and errors
 
-- The selected row (or the header) shows a spinner and `restoring` in the
-  status column until the restore ends. The header shows `restoring src/app`
-  where the fetch progress usually is.
-- Only one write action runs at a time. Pressing `u` or `s` meanwhile
-  flashes `wait for the restore of src/app to finish`. Navigation and
-  everything else keep working.
-- A running background fetch does not block a restore.
-- Done: flash `restored src/app`. The watcher refreshes the affected rows.
-  The app also reloads the subtree, because the structure can have changed.
-- Failure: the restore stops at the first repository that fails. The footer
-  flashes `restore failed in src/app/lib: <git's message>`, and the detail
-  pane of the selected node shows the same message until the next restore.
-  Restore is idempotent, so it can be run again after fixing the cause.
+- A line above the footer shows `checking …` and then `restoring …` with a
+  spinner. Only one restore runs at a time; pressing `x` meanwhile flashes
+  `wait for the restore of src/app to finish`. Everything else keeps working.
+- A running fetch does not block a restore.
+- Done: flash `restored src/app`; the app reloads the tree and all statuses,
+  because the structure can have changed.
+- Failure: the restore stops with git's message, shown in red above the
+  footer (`restore of src/app failed: …`) until the next key. Restore is
+  idempotent, so it can be run again after fixing the cause. Repositories
+  that were restored before the failure stay restored.
 
 ### Implementation note
 
-For each repository, top-down (`T` = target):
+`git.Provider.Restore` (`internal/submodule/git/restore.go`) walks the
+repositories itself, top-down; the children of a repository run
+concurrently, bounded by the provider's semaphore. For each repository
+(`T` = target) it runs, with `-c submodule.recurse=false`:
 
 ```sh
-git merge --abort / rebase --abort / cherry-pick --abort / revert --abort   # whichever is in progress
-git checkout --detach --force T      # submodule off the pin; superproject: git reset --hard HEAD
-git reset --hard T
-git clean -ffd                       # -ff: also untracked nested repositories
-git submodule sync
-git submodule init                   # all submodules of T, including inactive ones
-# for each gitlink in T: make sure the repo exists (clone/absorb), then recurse
+cat-file / fetch --all            # only if T is missing locally
+rebase|cherry-pick|revert --quit  # whichever is in progress; --quit, not --abort: no ref moves
+checkout --force --detach T       # only if HEAD is not T, so a branch is never moved
+reset --hard                      # also ends a merge
+clean -ffd                        # -ff: untracked repositories too; ignored files stay
+submodule sync
+submodule update --init --checkout --force -- <not yet initialized children>
+# then every gitlink of T's tree (ls-tree -r T) is restored the same way
 ```
 
-The repository can be walked by submarine itself, not by `git submodule
-update --recursive`, so progress, the loss check and errors are per
-repository. `git submodule update --init --checkout --force` is an option for
-the clone step. The loss check runs right before the restore, against the
-current state, not the displayed one.
+`--checkout` overrides `submodule.<name>.update`, and the explicit paths
+override `submodule.<name>.active`, so no child module is skipped.
+
+`RestoreLoss` (`lossOf`) follows the repositories on disk: per repository
+`status` (without submodules), the in-progress state files, and
+`rev-list --count HEAD --not --branches --tags --remotes` if HEAD is not the
+target. A directory in the untracked list is searched for `.git`
+*directories* (a standalone repository); an absorbed submodule leaves only a
+`.git` file and loses just its worktree.
 
 ## Stage pin
 
@@ -217,46 +217,41 @@ failure.
 ## Keys and palette
 
 Both are submodule keys (`keyMap.Submodule`), shown in the detail pane's
-palette, or in the footer, **only while they apply** to the selection:
+palette, or in the footer when the pane can't show it. Restore is always
+offered: it is idempotent, and the palette is static.
 
-| Key | Shown when | Pressed when not applicable (flash) |
+| Key | Action | Pressed when not possible (flash) |
 |---|---|---|
-| `u` restore | The node or a loaded descendant has an issue restore fixes (`changed`, `conflict`, `missing`, `off pin`), or the root has a staged pin | `nothing to restore in src/app` |
-| `s` stage pin | [Available](#available-when) | `src/app is on its pin` / `src/app has uncommitted changes; commit or restore them first` / `the superproject has no pin` |
+| `x` restore | Restore the selection | `this data source can't restore` (mock); `wait for the restore of … to finish` |
+| `s` stage pin | [Stage pin](#stage-pin), not implemented | `src/app is on its pin` / `src/app has uncommitted changes; commit or restore them first` / `the superproject has no pin` |
 
-Full help (`?`) always lists both.
+`R` would sit next to `r` (reload), a dangerous mix-up for a destructive
+action, hence `x`.
 
 ## Testing
 
-- Provider: tests on fixtures from `scripts/make-fixture.sh`, which builds
-  every state. For restore: changed, untracked, untracked repository
-  (absorbed and standalone), conflict, rebase in progress, off pin on a
-  branch, off pin detached with unreachable commits, not initialized,
-  inactive, `update = none`, a submodule added and one removed between two
-  root commits, nested at depth ≥ 2. Assert the postconditions with
-  `git status --porcelain --ignored=no` and `git submodule status
-  --recursive`, and that branches are unchanged. For stage pin: index entry,
-  refusal on a dirty worktree, refusal when HEAD moved.
-- Loss summary: unit tests on `submodule` (no UI), like `Status.Issues()`.
-- UI: run it on a fixture in tmux (see
-  [architecture.md](architecture.md#testing)). Check the confirmation line,
-  the spinner, the flash messages and the palette.
+- Provider (`restore_test.go`), on fixtures from `scripts/make-fixture.sh`:
+  a restored superproject is exact (every repository clean, `submodule status
+  --recursive` without prefixes, `libs/missing` initialized), branches are
+  not moved, ignored files survive, a merge and a rebase in progress end, a
+  standalone clone and a removed submodule's directory are deleted, a missing
+  submodule is cloned again, `update = none` and inactive submodules are
+  restored, an unavailable commit is reported. The loss is empty for off pin,
+  missing and unpushed submodules, counts files, nested changes, merges,
+  detached commits (not those on a branch) and standalone repositories.
+- UI (`internal/tui/restore_test.go`): restores at once without a loss, asks
+  with one (`y` restores, anything else cancels), the mock can't restore.
+- By hand in tmux on a fixture, see
+  [architecture.md](architecture.md#testing).
 
 ## Open questions
 
-1. **Ignored files.** Should restore also delete ignored files (`git clean
-   -x`)? That is the literal "no additional files", but it deletes `.env`,
-   `node_modules`, build output and IDE settings in every submodule.
-   *Proposal: keep ignored files.*
-2. **Target of a submodule restore with a staged pin.** The staged pin
-   (index, what the UI shows as *Pinned*, what `git submodule update` does)
-   or the committed one (parent's `HEAD`, which also unstages)?
-   *Proposal: the index. Unstaging happens only through a superproject
-   restore.*
-3. **Network.** May restore clone uninitialized submodules and fetch missing
-   pins (non-interactive), or should it fail and ask for `f` / a manual
-   clone? *Proposal: allow it, only for missing objects.*
-4. **Keys.** `u` restore, `s` stage pin? `R` would sit next to `r` reload,
-   which is a dangerous mix-up for a destructive action.
-5. **Confirmation without loss.** Is "no question when nothing is lost" OK,
-   or should restore always ask?
+Decided for restore: ignored files are kept (`clean` without `-x`); a
+submodule is restored to the index gitlink, so a staged pin is its target and
+survives; restore may clone and fetch what is missing; the key is `x`; it
+asks only if something would be lost.
+
+Open (stage pin):
+
+1. **Key.** `s`?
+2. **Palette.** Show it always (like restore), or only while it applies?

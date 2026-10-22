@@ -65,6 +65,13 @@ type Watcher interface {
 ```
 
 ```go
+type Restorer interface {
+    RestoreLoss(ctx context.Context, path string) (Loss, error) // what a restore would discard
+    Restore(ctx context.Context, path string) error              // may clone/fetch what is missing
+}
+```
+
+```go
 type Locator interface {
     Dir(path string) string                    // absolute directory, "" if unknown
 }

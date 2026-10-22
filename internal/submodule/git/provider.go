@@ -1,5 +1,6 @@
-// Package git provides a read-only submodule.Provider backed by the git
-// command line. It never touches the network.
+// Package git provides a submodule.Provider backed by the git command line.
+// It reads; it writes only in Restore, and uses the network only in Fetch and
+// in Restore (for what is missing).
 package git
 
 import (
@@ -32,6 +33,7 @@ type Provider struct {
 	sem      chan struct{} // bounds concurrent Status calls
 	fetchSem chan struct{} // bounds concurrent fetches
 	sshEnv   []string      // extra environment for fetches
+	extraEnv []string      // more environment for fetches and clones; tests
 
 	// WatchInterval is how often Watch checks for changes.
 	WatchInterval time.Duration

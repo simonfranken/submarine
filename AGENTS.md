@@ -37,8 +37,9 @@ gofmt -l .                    # must print nothing
   state means (`Status.Issues()`). `internal/tui/theme` decides how it looks.
   Components never classify states or define colors themselves.
 - **Data access** only through `submodule.Provider` (and its optional
-  `Fetcher` / `Watcher`). The git provider only uses the network in
-  `Fetch`, and git must never prompt.
+  `Fetcher` / `Watcher` / `Restorer`). The git provider only uses the
+  network in `Fetch` and, for missing objects, in `Restore`; git must never
+  prompt, and the provider writes only on a user's action.
 - **Colors** only from `theme.Theme`, ANSI 16 colors for meaning (see
   `docs/ux-guide.md#colors`). Render segments on a background with a `base`
   style (`LevelStyle(level, base)`, `Delta(pin, base)`).

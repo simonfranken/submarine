@@ -128,10 +128,14 @@ commit hashes. It doesn't answer the questions users actually have:
   list is not mistaken for a healthy repository. See
   [Problems only](ux-guide.md#problems-only).
 
-### Actions (planned)
+### Actions
 
-The tool is read-only so far. The first write actions, restore and stage
-pin, are drafted in [actions.md](actions.md).
+- **F56** `x` restores the selection (a submodule, or the superproject when
+  the header is selected): its worktree becomes exactly what git records, and
+  so do all submodules below it, recursively. It asks first, but only if
+  something would be lost. See [actions.md](actions.md#restore).
+
+Stage pin is drafted in [actions.md](actions.md#stage-pin).
 
 ## Usage
 
@@ -154,7 +158,9 @@ submarine --mock    # built-in mock data
 - **N6** Works in narrow terminals (detail pane hides below 90 columns).
 - **N7** The UI is independent of the data source: the mock and the git
   provider are interchangeable without UI changes.
-- **N8** The git provider only uses the network in `Fetch`, and never
-  prompts (no password, passphrase or host-key questions; those fetches
-  fail with git's message). It uses the `git` command line, so the user's
-  git configuration applies. Apart from fetching, it is read-only.
+- **N8** The git provider only uses the network in `Fetch` and, for objects
+  that are missing, in `Restore`. It never prompts (no password, passphrase
+  or host-key questions; those fail with git's message). It uses the `git`
+  command line, so the user's git configuration applies. Apart from fetching
+  and the actions of [actions.md](actions.md), it is read-only: it writes
+  only when the user asks.
