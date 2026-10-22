@@ -246,3 +246,15 @@ usual keys. A filtered-out selection moves to the next visible submodule
 (previous if none follows) instead of the first, so the cursor stays near
 where it was. This adds the `bubbles/textinput` dependency (and its
 `atotto/clipboard` import).
+
+## Staged pin is shown in the tree, but is not an issue
+
+A staged pin was only visible in the detail pane, so the header's `1 pin
+staged` could not be traced to a row, and `in sync  nothing to do` was
+wrong for a submodule whose pin change still has to be committed. The tree
+now shows it in the status column: blue `staged` replaces `in sync`; next to
+an issue word it is a blue `●` (an issue wins the word, since the cell holds
+one word, D3). It is not counted in `+n`, because `+n` and the header count
+issues and a staged pin stays quiet (D4). A collapsed row shows `●` if a
+staged pin is hidden below it (`Hidden.Staged`), placed before the `·k`
+counts so truncation of the 16-column cell cuts the counts first.

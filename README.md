@@ -19,8 +19,9 @@ the questions you actually have:
 - **Branch plus distance, not hashes.** `origin/main ↓2` says more than
   `b7c8d9e`. A pin on a feature branch shows that branch.
 - **Problems are loud, healthy is quiet.** Submodules without issues are
-  muted `in sync`. A collapsed parent counts the problems hidden below it
-  (`·1`).
+  muted `in sync`; a staged pin shows as blue `staged` (or a `●` after an
+  issue word). A collapsed parent counts the problems hidden below it
+  (`·1`) and shows `●` if a staged pin is hidden.
 - **Words, not symbols.** Every state is a short word (`unpushed`, `conflict`,
   `missing`, `off pin`, `changed`), so nothing depends on color alone.
 - **Live.** Fetches in the background on startup and follows changes you make

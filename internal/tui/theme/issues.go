@@ -12,6 +12,10 @@ import (
 // InSync is the word for a submodule without issues.
 const InSync = "in sync"
 
+// Staged is the word for a pin change staged in the superproject. It is not
+// an issue: it replaces InSync, or follows an issue word as a marker.
+const Staged = "staged"
+
 // IssueWord is the short label for an issue kind shown in the tree.
 func IssueWord(k submodule.IssueKind) string {
 	switch k {

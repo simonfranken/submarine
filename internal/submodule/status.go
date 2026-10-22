@@ -60,13 +60,14 @@ func (s *Status) Issues() []Issue {
 	return out
 }
 
-// Hidden counts issues below a submodule per level.
-type Hidden struct{ Warn, Danger int }
+// Hidden counts issues below a submodule per level, plus staged pins (which
+// are not issues).
+type Hidden struct{ Warn, Danger, Staged int }
 
-// Total is the number of issues of all levels.
+// Total is the number of issues of all levels; staged pins are not counted.
 func (h Hidden) Total() int { return h.Warn + h.Danger }
 
-// HiddenIssues counts the issues of all loaded descendants per level. A
+// HiddenIssues counts the issues and staged pins of all loaded descendants. A
 // descendant whose load failed counts as one danger, since its state is
 // unknown.
 func (m *Submodule) HiddenIssues() Hidden {
@@ -74,6 +75,9 @@ func (m *Submodule) HiddenIssues() Hidden {
 	Walk(m.Children, func(c *Submodule) {
 		if c.Status == nil && c.Err != nil {
 			h.Danger++
+		}
+		if c.Status != nil && c.Status.PinStaged {
+			h.Staged++
 		}
 		for _, is := range c.Status.Issues() {
 			switch is.Level {

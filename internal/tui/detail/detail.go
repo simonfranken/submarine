@@ -97,11 +97,11 @@ func (m Model) lines(s *submodule.Submodule) []string {
 	for _, is := range issues {
 		out = append(out, t.LevelStyle(is.Level, lipgloss.NewStyle()).Width(labelWidth).Render(theme.IssueWord(is.Kind))+text.Render(is.Detail))
 	}
-	if len(issues) == 0 {
+	if len(issues) == 0 && !st.PinStaged {
 		out = append(out, label(theme.InSync)+muted.Render("nothing to do"))
 	}
 	if st.PinStaged {
-		out = append(out, theme.Fg(t.Info).Width(labelWidth).Render("staged")+text.Render("pin change staged, not committed"))
+		out = append(out, theme.Fg(t.Info).Width(labelWidth).Render(theme.Staged)+text.Render("pin change staged, not committed"))
 	}
 	if st.Checkout == submodule.CheckoutDetached {
 		out = append(out, label("")+muted.Render("detached HEAD on pin"))
@@ -169,6 +169,9 @@ func (m Model) lines(s *submodule.Submodule) []string {
 		}
 		if h.Warn > 0 {
 			parts = append(parts, t.LevelStyle(submodule.LevelWarn, lipgloss.NewStyle()).Render(fmt.Sprintf("%d warning(s)", h.Warn)))
+		}
+		if h.Staged > 0 {
+			parts = append(parts, theme.Fg(t.Info).Render(fmt.Sprintf("%d %s", h.Staged, theme.Staged)))
 		}
 		if len(parts) > 0 {
 			children += muted.Render(" · ") + strings.Join(parts, muted.Render(", ")) + muted.Render(" below")

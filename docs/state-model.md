@@ -82,6 +82,8 @@ Rules:
   changed.
 - **Not issues** (quiet): in sync, pin behind/ahead/diverged but pushed,
   staged pin, detached HEAD on the pin. They are shown as information only.
+  A staged pin is also visible in the tree (`staged` or a `●` marker), see
+  [ux-guide.md](ux-guide.md#tree-row), but is never counted as an issue.
 - A loading error is shown as `error` (Danger) in the UI; it is not an issue
   kind.
 

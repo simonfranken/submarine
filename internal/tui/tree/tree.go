@@ -410,7 +410,12 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 	nameCell := seg(textColor, name) + seg(t.Muted, count) + pad(nameW-lipgloss.Width(name+count))
 
 	// status: the most severe issue as a word, "+n" for further issues;
-	// a muted "in sync" without issues, so an empty cell never looks broken
+	// a muted "in sync" without issues, so an empty cell never looks broken.
+	// A staged pin is no issue: it replaces "in sync", or follows the issue
+	// as a blue marker (also for staged pins below a collapsed row).
+	staged := s.Status != nil && s.Status.PinStaged
+	h := s.HiddenIssues()
+	stagedMark := staged && len(issues) > 0
 	var status string
 	switch {
 	case s.Err != nil:
@@ -422,10 +427,15 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 		if len(issues) > 1 {
 			status += seg(t.Muted, fmt.Sprintf(" +%d", len(issues)-1))
 		}
+	case staged:
+		status = seg(t.Info, theme.Staged)
 	default:
 		status = seg(t.Muted, theme.InSync)
 	}
-	if h := s.HiddenIssues(); collapsed && h.Total() > 0 {
+	if stagedMark || collapsed && h.Staged > 0 {
+		status += pad(1) + seg(t.Info, t.Glyphs.Staged)
+	}
+	if collapsed && h.Total() > 0 {
 		for _, c := range []struct {
 			level submodule.Level
 			n     int

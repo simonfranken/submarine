@@ -63,7 +63,7 @@ indent ▸ name [n]   status          ref             delta
 | indent | 2 per depth | |
 | toggle | 3 | `▸` collapsed, `▾` expanded, blank for leaves |
 | name | fits the widest visible name | name, `[n]` = direct children (collapsed only) |
-| status | 16 | issue word, `+n`, `·k` hidden issues per level (red, then yellow); muted `in sync` without issues; spinner while loading |
+| status | 16 | issue word, `+n`, `●` staged pin, `·k` hidden issues per level (red, then yellow); blue `staged` or muted `in sync` without issues; spinner while loading |
 | ref | widest ref, max 22 | resolved ref; muted short SHA if unresolved |
 | delta | 6 | `↑n`, `↓n`, `↑n↓m` |
 
@@ -77,8 +77,8 @@ indent ▸ name [n]   status          ref             delta
 
 1. Directory (muted) and name (bold)
 2. One line per issue: word (colored, 10 columns) + explanation;
-   `in sync  nothing to do` if there are none; `staged` and
-   `detached HEAD on pin` as information
+   `in sync  nothing to do` if there are none and no pin is staged;
+   `staged` and `detached HEAD on pin` as information
 3. `Changes` (only with uncommitted changes), see
    [Change preview](#change-preview)
 4. `Ref` with distance and `via <rule>`; `Fetched <age>` of the submodule;
@@ -165,7 +165,7 @@ colors in components.
 |---|---|---|
 | Danger | ANSI `1` red, bold | `unpushed`, `conflict`, `error`, `↑n` of an unpushed pin |
 | Warn | ANSI `3` yellow | `missing`, `off pin`, `changed`, differing checkout SHA |
-| Info | ANSI `4` blue | `staged` |
+| Info | ANSI `4` blue | `staged`, the `●` staged marker |
 | Primary | ANSI `6` cyan | branch names, commit hashes, spinner |
 | Muted | ANSI `8` grey | quiet rows, directory headers, arrows, labels |
 | Text | terminal default | normal text |

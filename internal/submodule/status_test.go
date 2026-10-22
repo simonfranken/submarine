@@ -39,15 +39,15 @@ func TestIssues(t *testing.T) {
 
 func TestHiddenIssues(t *testing.T) {
 	ok := &Status{Pin: PinInfo{Pushed: true}}
-	dirty := &Status{Worktree: WorktreeModified, Pin: PinInfo{Pushed: true}}
+	dirty := &Status{Worktree: WorktreeModified, Pin: PinInfo{Pushed: true}, PinStaged: true}
 	unpushed := &Status{}
 	grandchild := &Submodule{Status: unpushed}
 	child := &Submodule{Status: dirty, Children: []*Submodule{grandchild}}
 	loading := &Submodule{}
 	root := &Submodule{Status: ok, Children: []*Submodule{child, {Status: ok}, loading}}
 
-	if got := root.HiddenIssues(); got != (Hidden{Warn: 1, Danger: 1}) {
-		t.Errorf("HiddenIssues() = %+v; want 1 warn, 1 danger", got)
+	if got := root.HiddenIssues(); got != (Hidden{Warn: 1, Danger: 1, Staged: 1}) {
+		t.Errorf("HiddenIssues() = %+v; want 1 warn, 1 danger, 1 staged", got)
 	}
 }
 

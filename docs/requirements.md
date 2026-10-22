@@ -35,7 +35,7 @@ commit hashes. It doesn't answer the questions users actually have:
   e.g. `[2]`.
 - **F6** A collapsed submodule shows the number of issues **hidden** in all
   its descendants (`·1 ·2`), one count per level: errors in red, then
-  warnings in yellow.
+  warnings in yellow. A staged pin below shows as a blue `●` before them.
 - **F7** Expansion state of descendants is remembered when a parent is
   collapsed and restored when it is expanded again (except after
   "collapse all", which resets it).
@@ -44,7 +44,8 @@ commit hashes. It doesn't answer the questions users actually have:
 
 - **F10** Each submodule shows at most **one** state word: the most severe
   issue, plus `+n` if there are more. Submodules without issues show a
-  muted `in sync`.
+  muted `in sync`, or a blue `staged` if their pin change is staged. With
+  issues, a staged pin adds a blue `●` after the word.
   See [state-model.md](state-model.md) for the full rules.
 - **F11** Each submodule shows its pin as a ref (`origin/main`, a tag, or a
   short SHA as a fallback) and the distance to that ref (`↑n`, `↓n`, `↑n↓m`).
