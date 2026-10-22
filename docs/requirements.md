@@ -120,13 +120,21 @@ commit hashes. It doesn't answer the questions users actually have:
   submodule (none if nothing matches); closing the filter keeps the
   selection (the superproject if none is left). See [Filter](ux-guide.md#filter).
 
+- **F55** `!` toggles "problems only": the tree shows only submodules with
+  an issue (**F10**) or an unknown state (loading, `error`), plus their
+  ancestors, expanded. It combines with the filter (**F54**) and stays when
+  the filter closes. A line above the footer says `problems only`, so a short
+  list is not mistaken for a healthy repository. See
+  [Problems only](ux-guide.md#problems-only).
+
 ### Actions (planned, not implemented)
 
 | Key | Action |
 |---|---|
 | `u` | Check out the pinned commit (`git submodule update`) |
 | `b` | Bump the pin to the tip of its ref |
-| `!` | Show only submodules with issues |
+
+See [actions.md](actions.md) for the draft of the write actions.
 
 ## Usage
 

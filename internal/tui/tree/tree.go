@@ -27,11 +27,13 @@ type Model struct {
 	roots    []*submodule.Submodule
 	expanded map[string]bool // keyed by Submodule.Path; kept when ancestors collapse
 	filter   string          // lower-case; empty if not filtering
-	cursor   *submodule.Submodule
-	offset   int // index of the first visible row
-	width    int
-	height   int
-	spinner  string
+	// problemsOnly hides submodules without issues; it combines with filter.
+	problemsOnly bool
+	cursor       *submodule.Submodule
+	offset       int // index of the first visible row
+	width        int
+	height       int
+	spinner      string
 }
 
 func New(t theme.Theme) Model {
@@ -365,8 +367,12 @@ func (m Model) View() string {
 			lines = append(lines, m.nodeLine(r, nameColW, refW))
 		}
 	}
-	if len(rows) == 0 && m.filter != "" {
-		lines = append(lines, theme.Fg(m.theme.Muted).Width(m.width).Render(" no submodule matches"))
+	if len(rows) == 0 && m.narrowed() {
+		none := " no submodule matches"
+		if m.filter == "" {
+			none = " no problems"
+		}
+		lines = append(lines, theme.Fg(m.theme.Muted).Width(m.width).Render(none))
 	}
 	for len(lines) < m.height {
 		lines = append(lines, strings.Repeat(" ", m.width))

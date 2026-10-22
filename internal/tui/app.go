@@ -199,6 +199,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			} else {
 				s.Status, s.Err = msg.status, nil
 			}
+			m.tree.Refit()
 		}
 		if m.loads.done(msg.path) {
 			return m, m.loadStatus(msg.path)
@@ -386,7 +387,10 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.filtering = true
 		m.layout()
 		return m, m.filter.Focus()
-	case key.Matches(msg, k.Update, k.Bump, k.Issues):
+	case key.Matches(msg, k.Issues):
+		m.tree.SetProblemsOnly(!m.tree.ProblemsOnly())
+		m.layout()
+	case key.Matches(msg, k.Update, k.Bump):
 		cmd := m.footer.Flash("“" + msg.String() + "” is not implemented in the prototype")
 		m.layout()
 		return m, cmd
@@ -438,11 +442,27 @@ func (m Model) filterView() string {
 	if !m.filter.Focused() {
 		hint = "/ edit • esc close"
 	}
+	if m.tree.ProblemsOnly() {
+		hint = "problems only (!) • " + hint
+	}
 	hint = theme.Fg(m.theme.Muted).Render(hint)
 	m.filter.Width = max(m.width-lipgloss.Width(hint)-6, 1)
 	in := m.filter.View()
 	gap := max(m.width-2-lipgloss.Width(in)-lipgloss.Width(hint), 1)
 	return lipgloss.NewStyle().Width(m.width).Padding(0, 1).Render(in + strings.Repeat(" ", gap) + hint)
+}
+
+// extraLine reports whether a line above the footer is shown: the filter, or
+// the notice that only problems are shown.
+func (m Model) extraLine() bool { return m.filtering || m.tree.ProblemsOnly() }
+
+// problemsView is the line above the footer while only problems are shown, so
+// a short list is not mistaken for a healthy repository.
+func (m Model) problemsView() string {
+	left := theme.Fg(m.theme.Warn).Render("problems only")
+	right := theme.Fg(m.theme.Muted).Render("! show all")
+	gap := max(m.width-2-lipgloss.Width(left)-lipgloss.Width(right), 1)
+	return lipgloss.NewStyle().Width(m.width).Padding(0, 1).Render(left + strings.Repeat(" ", gap) + right)
 }
 
 // copyPath copies the absolute directory of the selected submodule to the
@@ -470,7 +490,7 @@ func (m Model) copyPath() (tea.Model, tea.Cmd) {
 func (m *Model) layout() {
 	m.footer.SetWidth(m.width)
 	bodyHeight := m.height - headerHeight - lipgloss.Height(m.footer.View())
-	if m.filtering {
+	if m.extraLine() {
 		bodyHeight--
 	}
 	bodyHeight = max(bodyHeight, 0)
@@ -508,6 +528,8 @@ func (m Model) View() string {
 	parts := []string{zone.Mark(m.tree.RootZone(), head), body}
 	if m.filtering {
 		parts = append(parts, m.filterView())
+	} else if m.tree.ProblemsOnly() {
+		parts = append(parts, m.problemsView())
 	}
 	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
 }

@@ -109,6 +109,7 @@ files.
 | `space` | Toggle the selected submodule |
 | `home` `end` / `g` `G`, `pgup` `pgdn` | Jump, page |
 | `/` | Filter |
+| `!` | Problems only |
 | `c` | Copy path |
 | `f` / `r` | Fetch / reload |
 | `?` | Full help |
@@ -118,8 +119,8 @@ The mouse works too: click to select, click `▸` to toggle, wheel to move.
 
 ## Status
 
-A prototype. Browsing is complete; the actions `u` (check out the pin),
-`b` (bump the pin to the tip) and `!` (problems only) are planned.
+A prototype. Browsing is complete; the actions `u` (check out the pin) and `b` (bump the pin to the tip) are
+planned.
 
 ## Documentation
 

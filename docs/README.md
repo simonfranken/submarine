@@ -14,6 +14,7 @@ bare commit hash.
 | [state-model.md](state-model.md) | How a submodule's state is determined, summarized into issues, and how pins are resolved to refs |
 | [ux-guide.md](ux-guide.md) | Layout, attention hierarchy, colors, wording, navigation and key bindings |
 | [architecture.md](architecture.md) | Package layout, the provider boundary, async loading, testing |
+| [actions.md](actions.md) | **Draft:** the write actions restore and stage pin |
 | [decisions.md](decisions.md) | Decision log with rationale (ADR style) |
 
 ## Install
@@ -32,10 +33,11 @@ Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
 through a git provider (`internal/submodule/git`): `submarine [dir]`. It
 fetches in the background on startup (`--no-fetch` to skip; `f` to fetch
 again) and follows changes made in other shells. `submarine --mock` shows
-the built-in mock data (`internal/submodule/mock`). The actions `u`, `b`,
-`!` only show a "not implemented" message.
+the built-in mock data (`internal/submodule/mock`). `!` shows only
+submodules with problems. The actions `u` and `b` only show a "not
+implemented" message ([drafts of the write actions](actions.md)).
 
 Next steps, roughly in order:
 
 1. Actions: checkout pin (`submodule update`), bump pin to tip, init.
-2. "Problems only" (`!`) view; it can reuse the tree's filter.
+2. (done) "Problems only" (`!`) view, reusing the tree's filter.

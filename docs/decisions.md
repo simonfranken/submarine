@@ -282,3 +282,17 @@ problem is visible while a submodule is selected.
   Without an upstream the usual resolution applies.
 - The root is not in `Walk`, so counts, fetch and loading logic stay
   submodule-only; the app tracks it by the path `""`.
+
+## Problems only reuses the filter's tree reduction
+
+`!` shows only submodules with issues. Instead of a second view, the tree's
+filter got a second criterion: a submodule matches if its path contains the
+term *and*, with problems only, it has an issue. Ancestors of matches stay as
+context, expanded, so a danger deep in the tree is reachable without
+unfolding anything. Unlike the filter text it is a mode that outlives the
+filter line, so it has its own notice line above the footer: a short list
+must not look like a healthy repository (D4). Loading and failed submodules
+count as problems because their state is unknown (D7 counts `error` as danger
+too); the cost is that rows vanish as statuses arrive, so the selection is
+refitted after each status. Staged pins are not shown by it, since they are
+not issues.

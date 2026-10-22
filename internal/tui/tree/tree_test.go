@@ -411,3 +411,83 @@ func TestFilterKeepsRoot(t *testing.T) {
 		t.Error("closing the filter should keep the root")
 	}
 }
+
+// healthy gives every submodule of the fixture an issue-free status, then
+// marks the given paths as changed.
+func healthy(t *testing.T, m *Model, changed ...string) {
+	t.Helper()
+	submodule.Walk(m.roots, func(s *submodule.Submodule) {
+		s.Status = &submodule.Status{Pin: submodule.PinInfo{Pushed: true}}
+		for _, p := range changed {
+			if s.Path == p {
+				s.Status.Worktree = submodule.WorktreeModified
+			}
+		}
+	})
+}
+
+func TestProblemsOnlyShowsIssuesWithAncestors(t *testing.T) {
+	m := newTree(t)
+	healthy(t, m, "d")
+	m.SetProblemsOnly(true)
+	want := []string{"src/", "b", "modules/", "c", "d"}
+	if got := visible(m); !equal(got, want) {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+	assertCursor(t, m, "b") // a was selected and is healthy: next available
+	m.Select("d")
+	m.SetProblemsOnly(false)
+	assertCursor(t, m, "d")
+	if got := visible(m); len(got) != 8 {
+		t.Fatalf("rows = %v, want all expanded to d", got)
+	}
+}
+
+func TestProblemsOnlyKeepsUnknownStates(t *testing.T) {
+	m := newTree(t)
+	healthy(t, m)
+	f := m.roots[2]
+	f.Status, f.Err = nil, os.ErrNotExist // failed to load
+	m.roots[0].Status = nil               // still loading
+	m.SetProblemsOnly(true)
+	if got, want := visible(m), []string{"a", "src/", "f"}; !equal(got, want) {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+}
+
+func TestProblemsOnlyWithoutProblemsKeepsRoot(t *testing.T) {
+	m := New(theme.Default())
+	m.SetRoot(&submodule.Submodule{Status: &submodule.Status{Root: true}})
+	m.SetRoots(fixture())
+	m.SetSize(80, 20)
+	healthy(t, &m)
+	m.SetProblemsOnly(true)
+	if len(m.rows()) != 0 || !m.RootSelected() {
+		t.Fatalf("rows %v, root selected %v", visible(&m), m.RootSelected())
+	}
+	m.Down() // must not panic
+}
+
+func TestProblemsOnlyCombinesWithFilter(t *testing.T) {
+	m := newTree(t)
+	healthy(t, m, "d", "f")
+	m.SetProblemsOnly(true)
+	m.SetFilter("f")
+	if got, want := visible(m), []string{"src/", "f"}; !equal(got, want) {
+		t.Fatalf("rows = %v, want %v", got, want)
+	}
+	m.SetFilter("")
+	if !m.ProblemsOnly() || len(visible(m)) != 6 {
+		t.Fatalf("closing the filter keeps problems only: %v", visible(m))
+	}
+}
+
+func TestRefitMovesSelectionWhenProblemDisappears(t *testing.T) {
+	m := newTree(t)
+	healthy(t, m, "a", "f")
+	m.SetProblemsOnly(true)
+	assertCursor(t, m, "a")
+	m.roots[0].Status.Worktree = submodule.WorktreeClean
+	m.Refit()
+	assertCursor(t, m, "f")
+}

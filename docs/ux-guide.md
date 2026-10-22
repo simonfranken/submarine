@@ -220,7 +220,8 @@ colors in components.
 | `r` | Reload everything (e.g. after editing files) |
 | `c` | Copy the absolute directory of the selected submodule to the clipboard (OSC 52, so it also works over SSH; needs terminal support, in tmux `set -g set-clipboard on`). The footer confirms with `copied <path>`. Without a local provider (mock) the path relative to the superproject is copied |
 | `/` | Open the filter, see [Filter](#filter) |
-| `u`, `b`, `!` | Planned actions (see requirements) |
+| `!` | Toggle problems only, see [Problems only](#problems-only) |
+| `u`, `b` | Planned actions (see requirements) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).
@@ -250,6 +251,29 @@ match vanish. If nothing matches the tree says `no submodule matches`.
 - The filter line shows the keys that apply on its right.
 - The header counts are not filtered.
 
+### Problems only
+
+`!` reduces the tree to what needs attention. It uses the filter's rules
+(matches with their ancestors, shown expanded, see [Filter](#filter)), with
+"match" meaning *has an issue* (`Status.Issues()`) instead of *path contains
+the term*.
+
+- A submodule that is still loading or failed to load (`error`) counts as a
+  problem, since its state is unknown (as in the hidden counts, D7). Healthy
+  submodules vanish when their status arrives.
+- A staged pin is not an issue and does not show the row.
+- It combines with the filter (both must match). Unlike the filter it is a
+  mode, not an input: it stays until `!` is pressed again, also after `esc`
+  closed the filter.
+- A line above the footer shows `problems only` (yellow) and `! show all`.
+  While the filter line is open, its hint starts with `problems only (!)`
+  instead.
+- With no problem the tree says `no problems`.
+- The selection follows the filter's rule: if it stops being visible (also
+  when a status changes), the next visible submodule is selected, else the
+  previous one. The superproject stays selectable.
+- The header counts are not filtered.
+
 ### Key reference
 
 Every key in the UI, where it is shown, and whether it works. Update this
@@ -272,7 +296,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `f` | Fetch all repositories | Global | Help | yes |
 | `r` | Reload everything | Global | Help | yes |
 | `/` | Filter | Global | Help | yes |
-| `!` | Problems only | Global | Help | no (flashes "not implemented") |
+| `!` | Problems only (toggle) | Global | Help | yes |
 | `?` | Toggle full help | Global | Bar, Help | yes |
 | `q`, `ctrl+c` | Quit | Global | Bar, Help | yes |
 
