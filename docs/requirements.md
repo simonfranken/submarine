@@ -89,7 +89,7 @@ commit hashes. It doesn't answer the questions users actually have:
   severe first), staged pins, how many are still loading, and the time since
   the last fetch.
 - **F31** The footer shows key hints; `?` toggles the full help. It
-  temporarily shows short messages (e.g. "not implemented").
+  temporarily shows short messages (e.g. "copied <path>").
 
 ### Navigation
 
@@ -128,14 +128,10 @@ commit hashes. It doesn't answer the questions users actually have:
   list is not mistaken for a healthy repository. See
   [Problems only](ux-guide.md#problems-only).
 
-### Actions (planned, not implemented)
+### Actions (planned)
 
-| Key | Action |
-|---|---|
-| `u` | Check out the pinned commit (`git submodule update`) |
-| `b` | Bump the pin to the tip of its ref |
-
-See [actions.md](actions.md) for the draft of the write actions.
+The tool is read-only so far. The first write actions, restore and stage
+pin, are drafted in [actions.md](actions.md).
 
 ## Usage
 

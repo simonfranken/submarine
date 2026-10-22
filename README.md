@@ -119,8 +119,8 @@ The mouse works too: click to select, click `▸` to toggle, wheel to move.
 
 ## Status
 
-A prototype. Browsing is complete; the actions `u` (check out the pin) and `b` (bump the pin to the tip) are
-planned.
+A prototype. Browsing is complete and read-only; write actions (restore,
+stage pin) are being specified in [docs/actions.md](docs/actions.md).
 
 ## Documentation
 

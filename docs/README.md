@@ -33,10 +33,10 @@ Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
 through a git provider (`internal/submodule/git`): `submarine [dir]`. It
 fetches only when asked (`f`) and follows changes made in other shells. `submarine --mock` shows
 the built-in mock data (`internal/submodule/mock`). `!` shows only
-submodules with problems. The actions `u` and `b` only show a "not
-implemented" message ([drafts of the write actions](actions.md)).
+submodules with problems. It is read-only so far; the first write actions
+are [drafted](actions.md).
 
 Next steps, roughly in order:
 
-1. Actions: checkout pin (`submodule update`), bump pin to tip, init.
+1. Write actions: restore and stage pin, see [actions.md](actions.md).
 2. (done) "Problems only" (`!`) view, reusing the tree's filter.

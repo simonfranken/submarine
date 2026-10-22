@@ -380,10 +380,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, k.Issues):
 		m.tree.SetProblemsOnly(!m.tree.ProblemsOnly())
 		m.layout()
-	case key.Matches(msg, k.Update, k.Bump):
-		cmd := m.footer.Flash("“" + msg.String() + "” is not implemented in the prototype")
-		m.layout()
-		return m, cmd
 	}
 	return m, nil
 }

@@ -221,7 +221,6 @@ colors in components.
 | `c` | Copy the absolute directory of the selected submodule to the clipboard (OSC 52, so it also works over SSH; needs terminal support, in tmux `set -g set-clipboard on`). The footer confirms with `copied <path>`. Without a local provider (mock) the path relative to the superproject is copied |
 | `/` | Open the filter, see [Filter](#filter) |
 | `!` | Toggle problems only, see [Problems only](#problems-only) |
-| `u`, `b` | Planned actions (see requirements) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).
@@ -276,29 +275,27 @@ the term*.
 
 ### Key reference
 
-Every key in the UI, where it is shown, and whether it works. Update this
-table when a key is added, moved or implemented. "Bar" is the short footer
+Every key in the UI, where it is shown. Update this
+table when a key is added or moved. "Bar" is the short footer
 bar, "Palette" the detail pane's palette (the footer takes its keys over
 where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette)),
 "Help" the full help (`?`).
 
-| Key | Action | Group | Shown in | Implemented |
-|---|---|---|---|---|
-| `↑` / `k`, `↓` / `j` | Move selection | Navigation | Bar, Help | yes |
-| `←` / `h`, `→` / `l` | Fold / unfold, parent / first child | Navigation | Bar, Help | yes |
-| `H` / `⇧←`, `L` / `⇧→` | Collapse / expand all | Navigation | Bar, Help | yes |
-| `space` | Toggle expand/collapse | Navigation | Bar, Help | yes |
-| `home` / `g`, `end` / `G` | Header / last submodule | Navigation | Help | yes |
-| `pgup`, `pgdn` | Move by one screen | Navigation | Help | yes |
-| `c` | Copy path | Submodule | Palette, Help | yes |
-| `u` | Checkout pin | Submodule | Help | no (flashes "not implemented") |
-| `b` | Bump pin to tip | Submodule | Help | no (flashes "not implemented") |
-| `f` | Fetch all repositories | Global | Help | yes |
-| `r` | Reload everything | Global | Help | yes |
-| `/` | Filter | Global | Help | yes |
-| `!` | Problems only (toggle) | Global | Help | yes |
-| `?` | Toggle full help | Global | Bar, Help | yes |
-| `q`, `ctrl+c` | Quit | Global | Bar, Help | yes |
+| Key | Action | Group | Shown in |
+|---|---|---|---|
+| `↑` / `k`, `↓` / `j` | Move selection | Navigation | Bar, Help |
+| `←` / `h`, `→` / `l` | Fold / unfold, parent / first child | Navigation | Bar, Help |
+| `H` / `⇧←`, `L` / `⇧→` | Collapse / expand all | Navigation | Bar, Help |
+| `space` | Toggle expand/collapse | Navigation | Bar, Help |
+| `home` / `g`, `end` / `G` | Header / last submodule | Navigation | Help |
+| `pgup`, `pgdn` | Move by one screen | Navigation | Help |
+| `c` | Copy path | Submodule | Palette, Help |
+| `f` | Fetch all repositories | Global | Help |
+| `r` | Reload everything | Global | Help |
+| `/` | Filter | Global | Help |
+| `!` | Problems only (toggle) | Global | Help |
+| `?` | Toggle full help | Global | Bar, Help |
+| `q`, `ctrl+c` | Quit | Global | Bar, Help |
 
 ### Mouse
 
