@@ -139,7 +139,13 @@ func TestWatch(t *testing.T) {
 
 	// a commit in another shell
 	git(t, filepath.Join(super, "libs", "store"), "commit", "-q", "--allow-empty", "-m", "Local")
-	if c := next(t, ch); c != (submodule.Change{Path: "libs/store", Local: true}) {
+	c := next(t, ch)
+	if c == (submodule.Change{Path: "src/net"}) {
+		// git fetch writes FETCH_HEAD and the refs at different moments, so
+		// with a 20ms poll it can be reported in two rounds
+		c = next(t, ch)
+	}
+	if c != (submodule.Change{Path: "libs/store", Local: true}) {
 		t.Errorf("after commit: %+v, want local change of libs/store", c)
 	}
 
