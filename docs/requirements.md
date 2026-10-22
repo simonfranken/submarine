@@ -137,6 +137,13 @@ commit hashes. It doesn't answer the questions users actually have:
   staged or the committed pin (the latter unstages it). It asks for
   confirmation only if something would be lost. See [actions.md](actions.md#restore).
 
+- **F57** `b` opens a popup in the middle of the screen with a search line
+  and the local and remote branches of the selection (a submodule, or the
+  superproject). `↑` / `↓` select, `enter` switches, `esc` cancels. For a
+  submodule the branch tip becomes its staged pin and it is restored to it,
+  with everything below; HEAD ends on the branch. It asks for confirmation
+  only if something would be lost. See [actions.md](actions.md#switch-branch).
+
 Stage pin is drafted in [actions.md](actions.md#stage-pin).
 
 ## Usage
@@ -161,7 +168,7 @@ submarine --mock    # built-in mock data
 - **N7** The UI is independent of the data source: the mock and the git
   provider are interchangeable without UI changes.
 - **N8** The git provider only uses the network in `Fetch` and, for objects
-  that are missing, in `Restore`. It never prompts (no password, passphrase
+  that are missing, in `Restore` and `Switch`. It never prompts (no password, passphrase
   or host-key questions; those fail with git's message). It uses the `git`
   command line, so the user's git configuration applies. Apart from fetching
   and the actions of [actions.md](actions.md), it is read-only: it writes

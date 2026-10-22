@@ -27,6 +27,7 @@ type restoreState struct {
 	phase      restorePhase
 	to         submodule.RestoreTarget
 	loss       submodule.Loss
+	branch     *submodule.Branch // set for a branch switch, which reuses this flow
 }
 
 // lossMsg is the result of the check before a restore.
@@ -37,8 +38,9 @@ type lossMsg struct {
 }
 
 type restoreDoneMsg struct {
-	path string
-	err  error
+	path   string
+	branch string // the branch a switch ended on, "" if detached
+	err    error
 }
 
 // startRestore checks what restoring the selection would discard. If nothing
@@ -75,10 +77,15 @@ func (m Model) startRestore() (tea.Model, tea.Cmd) {
 func (m Model) checkRestore() (tea.Model, tea.Cmd) {
 	m.restore.phase = restoreChecking
 	m.layout()
-	r := m.provider.(submodule.Restorer)
-	ctx, path, to := m.ctx, m.restore.path, m.restore.to
+	ctx, path, to, b := m.ctx, m.restore.path, m.restore.to, m.restore.branch
 	check := func() tea.Msg {
-		loss, err := r.RestoreLoss(ctx, path, to)
+		var loss submodule.Loss
+		var err error
+		if b != nil {
+			loss, err = m.provider.(submodule.Switcher).SwitchLoss(ctx, path, *b)
+		} else {
+			loss, err = m.provider.(submodule.Restorer).RestoreLoss(ctx, path, to)
+		}
 		return lossMsg{path, loss, err}
 	}
 	return m, tea.Batch(check, m.tick())
@@ -139,38 +146,76 @@ func (m Model) answerRestore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) runRestore() (tea.Model, tea.Cmd) {
 	m.restore.phase = restoreRunning
 	m.layout()
-	r := m.provider.(submodule.Restorer)
-	ctx, path, to := m.ctx, m.restore.path, m.restore.to
-	run := func() tea.Msg { return restoreDoneMsg{path, r.Restore(ctx, path, to)} }
+	ctx, path, to, b := m.ctx, m.restore.path, m.restore.to, m.restore.branch
+	run := func() tea.Msg {
+		if b != nil {
+			branch, err := m.provider.(submodule.Switcher).Switch(ctx, path, *b)
+			return restoreDoneMsg{path, branch, err}
+		}
+		return restoreDoneMsg{path, "", m.provider.(submodule.Restorer).Restore(ctx, path, to)}
+	}
 	return m, tea.Batch(run, m.tick())
 }
 
 // restoreDone shows the result and reloads everything: the structure may have
 // changed.
 func (m Model) restoreDone(msg restoreDoneMsg) (tea.Model, tea.Cmd) {
-	name := "the superproject"
-	if m.restore != nil {
-		name = m.restore.name + m.restore.toText()
-	}
+	r := m.restore
 	m.restore = nil
 	var cmds []tea.Cmd
-	if msg.err != nil {
-		m.notice = "restore of " + name + " failed: " + msg.err.Error()
-	} else {
-		cmds = append(cmds, m.footer.Flash("restored "+name))
+	switch {
+	case r != nil && r.branch != nil && msg.err != nil:
+		m.notice = "switch of " + r.name + " to " + r.branch.Name + " failed: " + msg.err.Error()
+	case r != nil && r.branch != nil:
+		to := r.branch.Name
+		if msg.branch != "" {
+			to = msg.branch
+		} else if r.branch.Remote {
+			to += " (detached: local " + r.branch.Local + " is elsewhere)"
+		}
+		cmds = append(cmds, m.footer.Flash("switched "+r.name+" to "+to))
+	default:
+		name := "the superproject"
+		if r != nil {
+			name = r.name + r.toText()
+		}
+		if msg.err != nil {
+			m.notice = "restore of " + name + " failed: " + msg.err.Error()
+		} else {
+			cmds = append(cmds, m.footer.Flash("restored "+name))
+		}
 	}
 	cmds = append(cmds, m.reloadTree(true))
 	m.layout()
 	return m, tea.Batch(cmds...)
 }
 
-// toText is " to the committed pin" if that was chosen; the staged pin is the
+// toText is " to origin/feat" for a switch, " to the committed pin" if that was chosen; the staged pin is the
 // usual target and needs no words.
 func (r *restoreState) toText() string {
+	if r.branch != nil {
+		return " to " + r.branch.Name
+	}
 	if r.to == submodule.RestoreCommitted {
 		return " to the committed pin"
 	}
 	return ""
+}
+
+// verb and verbIng word the operation: a switch is shown like a restore, but
+// names its branch.
+func (r *restoreState) verb() string {
+	if r.branch != nil {
+		return "Switch"
+	}
+	return "Restore"
+}
+
+func (r *restoreState) verbIng() string {
+	if r.branch != nil {
+		return "switching"
+	}
+	return "restoring"
 }
 
 func restoreName(s *submodule.Submodule) string {
@@ -194,11 +239,11 @@ func (m Model) restoreView() string {
 	case restoreChecking:
 		left = theme.Fg(m.theme.Primary).Render(m.spinner.View()) + " " + theme.Fg(m.theme.Muted).Render("checking "+r.name+"…")
 	case restoreRunning:
-		left = theme.Fg(m.theme.Primary).Render(m.spinner.View()) + " " + theme.Fg(m.theme.Warn).Render("restoring "+r.name+r.toText()+"…")
+		left = theme.Fg(m.theme.Primary).Render(m.spinner.View()) + " " + theme.Fg(m.theme.Warn).Render(r.verbIng()+" "+r.name+r.toText()+"…")
 	case restoreAsking:
-		left = theme.Fg(m.theme.Warn).Render("Restore "+r.name+r.toText()+"?") + " " +
+		left = theme.Fg(m.theme.Warn).Render(r.verb()+" "+r.name+r.toText()+"?") + " " +
 			theme.Fg(m.theme.Danger).Render("Discards "+lossText(r.loss)+".")
-		right = theme.Fg(m.theme.Text).Bold(true).Render("y") + theme.Fg(m.theme.Muted).Render(" restore · ") +
+		right = theme.Fg(m.theme.Text).Bold(true).Render("y") + theme.Fg(m.theme.Muted).Render(" "+strings.ToLower(r.verb())+" · ") +
 			theme.Fg(m.theme.Text).Bold(true).Render("n") + theme.Fg(m.theme.Muted).Render(" cancel")
 	}
 	return m.line(left, right)

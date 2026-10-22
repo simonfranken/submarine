@@ -183,6 +183,7 @@ colors in components.
 | Border | ANSI `8` grey | pane and help separators |
 | Bar | adaptive 254 (light) / 235 (dark) | header background |
 | Selected | adaptive 253 (light) / 237 (dark) | selected row background |
+| Backdrop | adaptive 252 (light) / 238 (dark) | the screen behind a popup |
 
 - Background shades have no ANSI-16 equivalent, so they use `AdaptiveColor`.
   The background is detected once in `main` before Bubble Tea starts.
@@ -293,6 +294,34 @@ question is open. After `c` the name reads `src/app to the committed pin`. Witho
 superproject`. This line takes precedence over the filter line and the
 problems-only notice.
 
+### Switch branch
+
+`b` opens a popup in the middle of the screen (see
+[actions.md](actions.md#switch-branch)). The screen around it stays visible
+but dimmed: its colors are dropped and it is drawn in `Backdrop`, darker
+than `Muted`, so the popup has the focus.
+
+```
+╭──────────────────────────────────────────────────────────────────────╮
+│ Switch libs/feature                                                  │
+│ / filter branches                                                    │
+│ ──────────────────────────────────────────────────────────────────── │
+│ * main                                             92d1583  3d ago   │
+│   origin/feat/search                               58a2bf1  2h ago   │
+│ ↑↓ select · enter switch · esc cancel                                │
+╰──────────────────────────────────────────────────────────────────────╯
+```
+
+- Border `Border`, title in `Primary` bold, search prompt `Primary`, the
+  selected row on the `Selected` background, SHA and age `Muted`, the remote
+  prefix `Muted`, the checked-out branch bold with `*`.
+- Width at most 72 columns, height as the list (at most 14 rows), so
+  filtering does not resize it. While reading: spinner and `reading
+  branches…`; no match: `no branch matches`; error: red, inside the popup.
+- Enter closes the popup and continues on the line above the footer like a
+  [restore](#restore): `checking`, the question `Switch src/app to
+  origin/feat? Discards …   y switch · n cancel`, `switching …`.
+
 ### Key reference
 
 Every key in the UI, where it is shown. Update this
@@ -310,6 +339,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `home` / `g`, `end` / `G` | Header / last submodule | Navigation | Help |
 | `pgup`, `pgdn` | Move by one screen | Navigation | Help |
 | `c` | Copy path | Submodule | Palette, Help |
+| `b` | Switch branch (popup) | Submodule | Palette, Help |
 | `x` | Restore | Submodule | Palette, Help |
 | `f` | Fetch all repositories | Global | Help |
 | `r` | Reload everything | Global | Help |

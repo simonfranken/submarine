@@ -12,25 +12,30 @@ cmd/submarine/main.go         wiring: choose provider (git or --mock), start the
 internal/submodule/           domain model; NO UI imports
   model.go                    Repo, Submodule, Status, PinInfo, Commit, enums
   status.go                   Issues(), HiddenIssues(), Walk()
-  provider.go                 Provider interface
+  provider.go                 Provider interface; optional Fetcher, Watcher, Locator, Restorer, Switcher
 internal/submodule/git/       provider using the git CLI (reads, fetch, watch)
   exec.go                     git runner (environment, errors)
   parse.go                    pure parsers for git output (status, numstat, …)
   provider.go                 Tree, Status, pin → ref resolution
   fetch.go                    Fetch (network), Fetchable
   watch.go                    Watch: polls git metadata for changes
+  restore.go                  Restore, RestoreLoss (network: only what is missing)
+  switch.go                   Branches, SwitchLoss, Switch (stage the tip, restore, attach the branch)
   gitdir.go                   resolves .git dirs and gitdir: files
 internal/submodule/mock/      fixture provider with artificial latency
 internal/update/              self-update from the package registry; NO UI imports
 internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
   keys.go                     key bindings (also feed the help view)
+  restore.go, switch.go       restore / switch flows; a switch reuses restoreState
+  overlay.go                  draws the picker centered over the finished view
   msgs.go                     tree/status/fetch/change messages
   refresh.go                  reloader: one load per key, coalesced reruns
   theme/                      colors, glyphs, issue words, change letters, level styles
   tree/                       tree component: rows, navigation, mouse, view
   detail/                     detail pane; changes.go: change preview
   header/                     header line
+  branches/                   branch picker popup (search line + list)
   footer/                     key bar (navigation left, global right) and flash messages
 ```
 
@@ -68,6 +73,14 @@ type Watcher interface {
 type Restorer interface {
     RestoreLoss(ctx context.Context, path string) (Loss, error) // what a restore would discard
     Restore(ctx context.Context, path string) error              // may clone/fetch what is missing
+}
+```
+
+```go
+type Switcher interface {
+    Branches(ctx context.Context, path string) ([]Branch, error)          // local + remote, no network
+    SwitchLoss(ctx context.Context, path string, b Branch) (Loss, error)  // as RestoreLoss
+    Switch(ctx context.Context, path string, b Branch) (string, error)    // branch HEAD ends on, "" if detached
 }
 ```
 

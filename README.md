@@ -111,6 +111,7 @@ files.
 | `/` | Filter |
 | `!` | Problems only |
 | `c` | Copy path |
+| `b` | Switch branch: pick a local or remote branch; its tip is staged and the repository restored to it |
 | `x` | Restore: make the worktree exactly what git records (asks if work would be lost) |
 | `f` / `r` | Fetch / reload |
 | `?` | Full help |
@@ -121,7 +122,7 @@ The mouse works too: click to select, click `▸` to toggle, wheel to move.
 ## Status
 
 A prototype. Browsing is complete, and `x` restores a submodule or the whole
-superproject. More write actions (stage pin) are being specified in
+superproject, and `b` switches its branch. More write actions (stage pin) are being specified in
 [docs/actions.md](docs/actions.md).
 
 ## Documentation

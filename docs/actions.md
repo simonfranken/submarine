@@ -1,7 +1,7 @@
 # Actions (draft)
 
-**Status:** [Restore](#restore) is implemented (key `x`, decisions in
-[D23](decisions.md)). [Stage pin](#stage-pin) is still a draft; its open
+**Status:** [Restore](#restore) (key `x`, [D23](decisions.md)) and
+[Switch branch](#switch-branch) (key `b`, [D24](decisions.md)) are implemented. [Stage pin](#stage-pin) is still a draft; its open
 questions are [at the end](#open-questions).
 
 ## Principle
@@ -14,10 +14,11 @@ a difference in one of two directions:
 |---|---|---|
 | [Restore](#restore) | The worktree follows the recorded state | `x` |
 | [Stage pin](#stage-pin) | The recorded state follows the worktree | `s` |
+| [Switch branch](#switch-branch) | Both: the branch tip is recorded, then restored to | `b` |
 
-There is nothing else for now. Committing, pushing, switching branches and
-bumping a pin to the tip are done outside submarine. A bump is "check out
-the tip in the submodule, then `s`".
+There is nothing else for now. Committing, pushing and bumping a pin to the
+tip are done outside submarine. A bump is "check out the tip in the
+submodule, then `s`" (or switch to the branch with `b`).
 
 ## Restore
 
@@ -196,6 +197,72 @@ target. A directory in the untracked list is searched for `.git`
 *directories* (a standalone repository); an absorbed submodule leaves only a
 `.git` file and loses just its worktree.
 
+## Switch branch
+
+Moves the selected repository to another branch, in one step: the tip of the
+branch becomes the pin, and the repository is restored to it.
+
+### The popup
+
+`b` opens a popup in the middle of the screen: a search line on top, below it
+the branches of the selection, local ones first, then remote ones
+(`origin/…`), each group with the newest tip first. Each row shows the name
+(`*` marks the checked-out branch), the short SHA and the age of the tip.
+The list is read from the disk; fetch (`f`) is what brings new remote
+branches.
+
+| Key | Effect |
+|---|---|
+| text | Filters: every word must be in the name, case-insensitive. The selection stays on its branch if it still matches |
+| `↑` `↓`, `pgup` `pgdn` | Select |
+| `enter` | Switch to the selected branch |
+| `esc` | Close |
+
+Mouse and all other keys are ignored while the popup is open. A header
+selection switches the superproject.
+
+### Effect
+
+For a **submodule**, with the tip `T` the list showed:
+
+1. The parent's index records `T` as the pin (a staged pin; if `T` is the
+   committed pin, the index equals `HEAD` again).
+2. The submodule, and everything below it, is [restored](#restore) to `T`.
+3. HEAD is put on the branch (the branch name is the local one):
+   - a local branch: checked out;
+   - a remote branch `origin/feat`: the local branch `feat` is created,
+     tracking it; if `feat` exists at `T` it is checked out; if it exists
+     **elsewhere** it is not moved and HEAD stays detached at `T`.
+
+For the **superproject** step 1 is left out: the branch is checked out via the
+restore, so its submodules follow the pins of the new commit (staged pins of
+the old state are lost, and counted).
+
+Staging comes first, so a failed restore can be repeated with `x`. If the
+branch moved since the list was read (a fetch), the switch aborts with
+`origin/feat moved; open the list again`; the staged SHA is always the one
+shown.
+
+### Confirmation, network, errors
+
+As for restore: the loss is read from the disk and the question
+(`Switch src/app to origin/feat? Discards …   y switch · n cancel`) appears
+only if something would be lost. A submodule that is not initialized can't be
+switched (`src/app is not initialized; restore it first`). Network: only what
+is missing below, like restore. Lines above the footer: `checking …`,
+`switching src/app to origin/feat…`; flash `switched src/app to feat` (or
+`… to origin/feat (detached: local feat is elsewhere)`); failure
+`switch of src/app to origin/feat failed: …`, until the next key. One
+restore or switch runs at a time.
+
+### Implementation note
+
+`git.Provider.Switch` (`internal/submodule/git/switch.go`): verify the ref is
+still `T`; `update-index --cacheinfo` in the parent; `restoreRepo` (see
+restore); then `switch` / `switch -c <local> --track <remote-branch>`.
+`SwitchLoss` is `lossOf` with `T` as the target. `Branches` is one
+`for-each-ref`, without the `origin/HEAD` symref.
+
 ## Stage pin
 
 Records the commit checked out in a submodule as its new pin in the
@@ -254,6 +321,7 @@ offered: it is idempotent, and the palette is static.
 | Key | Action | Pressed when not possible (flash) |
 |---|---|---|
 | `x` restore | Restore the selection | `this data source can't restore` (mock); `wait for the restore of … to finish` |
+| `b` switch branch | [Switch branch](#switch-branch) | `this data source can't switch branches`; `wait for the restore of … to finish`; `src/app is not initialized; restore it first` |
 | `s` stage pin | [Stage pin](#stage-pin), not implemented | `src/app is on its pin` / `src/app has uncommitted changes; commit or restore them first` / `the superproject has no pin` |
 
 `R` would sit next to `r` (reload), a dangerous mix-up for a destructive
@@ -272,6 +340,13 @@ action, hence `x`.
   detached commits (not those on a branch) and standalone repositories.
 - UI (`internal/tui/restore_test.go`): restores at once without a loss, asks
   with one (`y` restores, anything else cancels), the mock can't restore.
+- Switch: provider (`switch_test.go`): list without `origin/HEAD`, local
+  first; a remote pick stages the tip and creates a tracking branch; an
+  existing local branch elsewhere is not moved; a moved ref aborts; the
+  superproject switch ends exact; the loss is the restore's. Picker
+  (`branches_test.go`): filter, selection, scrolling. UI (`switch_test.go`):
+  opens, filters, enter switches, asks with a loss, esc closes, the mock
+  can't.
 - By hand in tmux on a fixture, see
   [architecture.md](architecture.md#testing).
 

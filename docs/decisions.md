@@ -349,3 +349,38 @@ the same for every submodule of the target tree, initializing missing ones.
 does not implement it. Restore is idempotent and can be repeated after a
 failure. It takes the time of its slowest clone; there is no per-repository
 progress yet.
+
+## D24 — Switch branch: stage the tip, then restore
+
+**Context.** Switching branches was left to the shell. Users of a repository
+with many submodules want to move one to another branch and have the
+superproject record it.
+**Decision.** `b` opens a popup (search line, local then remote branches).
+Enter on a branch of a submodule stages its tip as the pin in the parent's
+index and restores the submodule to it (D23, recursion included); then HEAD
+is put on the branch. On the superproject it checks the branch out and
+restores below, without staging.
+- *Key `b`*, not `s`, which stays reserved for stage pin.
+- *Remote branch.* A local branch of that name is created, tracking it. If
+  one exists at another commit it is **not moved**: HEAD stays detached at
+  the tip and the flash says so (restore never moves branches, D23).
+- *Same loss rules as restore.* The loss is read from the disk; the question
+  appears only if something is lost. Staged first, so a failed restore can be
+  repeated with `x`. The pin question of restore (`s` / `c`) is skipped: the
+  staged pin is being replaced.
+- *What the picker showed is what is staged.* The branch carries its SHA; a
+  fetch may move the ref meanwhile, then the switch aborts
+  (`origin/feat moved; open the list again`).
+- *Network.* Extends D23: a tip often pins nested commits that are not on
+  disk, so switch may clone and fetch what is missing, like restore. The
+  list itself uses none; `f` refreshes remote branches.
+- *Popup.* The first overlay: drawn over the finished view (after
+  `zone.Scan`, so no zone marker is cut); the keys go to the picker while it
+  is open. The backdrop is dimmed: stripped of its styles and drawn in
+  `Backdrop`, an adaptive 256-color grey (238 dark / 252 light). `Muted`
+  (ANSI 8) was too bright to set the popup apart, and ANSI faint (SGR 2) is
+  ignored by some terminals. Like `Bar` and `Selected` it carries no meaning,
+  so it may leave the 16 ANSI colors.
+**Consequences.** `Switcher` is a new optional provider interface; the mock
+does not implement it. The switch runs as the restore does (one write
+operation at a time, same lines above the footer).

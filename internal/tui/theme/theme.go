@@ -8,8 +8,9 @@ import (
 )
 
 // Theme uses the 16 ANSI colors for everything that carries meaning, so
-// the TUI follows the user's terminal color scheme. Only background shades,
-// which have no ANSI equivalent, use adaptive 256-color values.
+// the TUI follows the user's terminal color scheme. Only background shades
+// and the dimmed backdrop, which have no ANSI equivalent, use adaptive
+// 256-color values.
 type Theme struct {
 	Primary  lipgloss.TerminalColor // accent: branch names, commit hashes
 	Info     lipgloss.TerminalColor
@@ -21,6 +22,7 @@ type Theme struct {
 	Border   lipgloss.TerminalColor // pane separators, help separators
 	Bar      lipgloss.TerminalColor // background of the header bar
 	Selected lipgloss.TerminalColor // background of the selected row
+	Backdrop lipgloss.TerminalColor // the screen behind a popup, dimmed
 	Glyphs   Glyphs
 }
 
@@ -40,6 +42,7 @@ func Default() Theme {
 		Border:   lipgloss.Color("8"),
 		Bar:      lipgloss.AdaptiveColor{Light: "254", Dark: "235"},
 		Selected: lipgloss.AdaptiveColor{Light: "253", Dark: "237"},
+		Backdrop: lipgloss.AdaptiveColor{Light: "252", Dark: "238"},
 		Glyphs:   g,
 	}
 }

@@ -15,6 +15,7 @@ import (
 	zone "github.com/lrstanley/bubblezone"
 
 	"submarine/internal/submodule"
+	"submarine/internal/tui/branches"
 	"submarine/internal/tui/detail"
 	"submarine/internal/tui/footer"
 	"submarine/internal/tui/header"
@@ -56,8 +57,10 @@ type Model struct {
 	// exactly then. The input is focused while typing and blurred after enter.
 	filtering bool
 
-	restore *restoreState // the restore in progress, nil if none
-	notice  string        // an error to show above the footer until the next key
+	restore    *restoreState   // the restore or switch in progress, nil if none
+	picker     *branches.Model // the branch picker, nil if closed
+	pickerPath string          // the repository the picker is for
+	notice     string          // an error to show above the footer until the next key
 
 	width, height int
 	showDetail    bool
@@ -159,7 +162,7 @@ func (m *Model) startFetch() tea.Cmd {
 
 // busy reports whether something shows a spinner.
 func (m Model) busy() bool {
-	if m.repo == nil || m.fetch.Running || (m.restore != nil && (m.restore.phase == restoreChecking || m.restore.phase == restoreRunning)) {
+	if m.repo == nil || m.fetch.Running || (m.picker != nil && m.picker.Loading()) || (m.restore != nil && (m.restore.phase == restoreChecking || m.restore.phase == restoreRunning)) {
 		return true
 	}
 	loading := m.repo.Root != nil && m.repo.Root.Status == nil && m.repo.Root.Err == nil
@@ -205,6 +208,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case changeMsg:
 		return m.changed(msg)
 
+	case branchesMsg:
+		return m.branchesLoaded(msg)
+
 	case lossMsg:
 		return m.lossChecked(msg)
 
@@ -237,6 +243,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 
 	case tea.MouseMsg:
+		if m.picker != nil {
+			return m, nil
+		}
 		m.tree.Update(msg)
 		return m, nil
 
@@ -331,6 +340,9 @@ func (m Model) changed(msg changeMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := m.keys
+	if m.picker != nil {
+		return m.pickBranch(msg)
+	}
 	if m.restore != nil {
 		switch m.restore.phase {
 		case restoreChoosing:
@@ -400,6 +412,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.filter.Focus()
 	case key.Matches(msg, k.Restore):
 		return m.startRestore()
+	case key.Matches(msg, k.Switch):
+		return m.startSwitch()
 	case key.Matches(msg, k.Issues):
 		m.tree.SetProblemsOnly(!m.tree.ProblemsOnly())
 		m.layout()
@@ -547,5 +561,9 @@ func (m Model) View() string {
 	} else if m.tree.ProblemsOnly() {
 		parts = append(parts, m.problemsView())
 	}
-	return zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
+	view := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
+	if m.picker != nil { // after zone.Scan, so no zone marker is cut
+		view = overlay(view, m.picker.View(m.width, m.height), m.width, m.height, theme.Fg(m.theme.Backdrop))
+	}
+	return view
 }

@@ -1,6 +1,9 @@
 package submodule
 
-import "context"
+import (
+	"context"
+	"time"
+)
 
 // Provider supplies repository data. Tree is expected to be fast (structure
 // only); Status may be slow and is called once per submodule, concurrently.
@@ -42,6 +45,31 @@ type Restorer interface {
 	// this moment.
 	RestoreLoss(ctx context.Context, path string, to RestoreTarget) (Loss, error)
 	Restore(ctx context.Context, path string, to RestoreTarget) error
+}
+
+// Branch is a local or remote-tracking branch of a repository.
+type Branch struct {
+	Ref     string    // full ref, e.g. "refs/remotes/origin/feat"
+	Name    string    // short name, e.g. "origin/feat"
+	Local   string    // name of the local branch it stands for, e.g. "feat"
+	Remote  bool      // a remote-tracking branch
+	Current bool      // HEAD is on this branch
+	SHA     string    // the tip when the list was read
+	When    time.Time // committer date of the tip
+}
+
+// Switcher is implemented by providers that can switch a repository to a
+// branch: the tip becomes the staged pin of a submodule, and the repository
+// (with everything below it) is restored to it. Path "" is the superproject.
+// Like Restore, Switch may clone or fetch what is missing below, but must
+// never prompt the user. Branches uses no network.
+type Switcher interface {
+	Branches(ctx context.Context, path string) ([]Branch, error)
+	// SwitchLoss reports what Switch would discard, read from the disk now.
+	SwitchLoss(ctx context.Context, path string, b Branch) (Loss, error)
+	// Switch returns the branch HEAD ends up on, "" if it is detached. It
+	// fails if b.Ref no longer points at b.SHA.
+	Switch(ctx context.Context, path string, b Branch) (string, error)
 }
 
 // RestoreTarget is the pin a submodule is restored to. It doesn't matter for

@@ -92,7 +92,7 @@ func newRestoreModel(t *testing.T, loss submodule.Loss) (tea.Model, *fakeRestore
 func feed(m tea.Model, cmd tea.Cmd) tea.Model {
 	for _, msg := range run(cmd) {
 		switch msg.(type) {
-		case lossMsg, restoreDoneMsg:
+		case lossMsg, restoreDoneMsg, branchesMsg:
 			m, _ = m.Update(msg)
 		}
 	}
