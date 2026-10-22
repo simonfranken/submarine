@@ -207,6 +207,11 @@ No CI runner: releases are built and published from a developer machine.
   - `submarine/<version>/submarine_<os>_<arch>` and `checksums.txt`
   - `submarine-latest/latest/VERSION`, replaced **last**, so a failed upload
     never advertises a broken version.
+- The `release` skill (`.claude/skills/release/SKILL.md`) drives a release:
+  latest tag → next semver from the commits since → check (`vet`, `test`,
+  `gofmt`, `make dist`) → tag and push → the developer runs `make release` →
+  the skill verifies the registry's `VERSION` and creates the Gitea release
+  with MCP (notes only; the binaries stay in the registry).
 - `install.sh` (`curl -fsSL …/raw/branch/main/install.sh | sh`) detects
   OS/arch, verifies the sha256, installs `submarine` and a `sub` symlink to
   `~/.local/bin` (`SUBMARINE_INSTALL_DIR`, `SUBMARINE_VERSION`,
