@@ -127,3 +127,44 @@ func TestListScrollsInASmallTerminal(t *testing.T) {
 		t.Errorf("cursor %d outside the window [%d,%d)", m.cursor, m.offset, m.offset+m.rows)
 	}
 }
+
+func TestClickSelectsTheBranchUnderTheMouse(t *testing.T) {
+	m := New(theme.Default(), "src/app")
+	m.SetBranches(list())
+	m.View(100, 30)
+	x, y := m.Origin(100, 30)
+
+	if inside, hit := m.Click(x+3, y+listTop+1, 100, 30); !inside || !hit || name(m) != "dev" {
+		t.Errorf("click on the 2nd row: inside=%v hit=%v selected %q", inside, hit, name(m))
+	}
+	if inside, hit := m.Click(x+3, y+listTop+3, 100, 30); !inside || !hit || name(m) != "origin/feat/search" {
+		t.Errorf("click on the 4th row: inside=%v hit=%v selected %q", inside, hit, name(m))
+	}
+	for _, c := range []struct {
+		name string
+		x, y int
+	}{
+		{"title", x + 3, y + 1},
+		{"search line", x + 3, y + 2},
+		{"hint line", x + 3, y + m.h - 2},
+		{"left border", x, y + listTop},
+	} {
+		before := name(m)
+		if inside, hit := m.Click(c.x, c.y, 100, 30); !inside || hit || name(m) != before {
+			t.Errorf("click on the %s: inside=%v hit=%v selected %q", c.name, inside, hit, name(m))
+		}
+	}
+	if inside, hit := m.Click(0, 0, 100, 30); inside || hit {
+		t.Errorf("click outside: inside=%v hit=%v", inside, hit)
+	}
+}
+
+func TestClickBelowTheLastBranchHitsNothing(t *testing.T) {
+	m := New(theme.Default(), "x")
+	m.SetBranches(list()[:1]) // 1 branch, the list is padded to 3 rows
+	m.View(100, 30)
+	x, y := m.Origin(100, 30)
+	if inside, hit := m.Click(x+3, y+listTop+2, 100, 30); !inside || hit {
+		t.Errorf("inside=%v hit=%v on an empty row", inside, hit)
+	}
+}

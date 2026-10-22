@@ -244,7 +244,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.MouseMsg:
 		if m.picker != nil {
-			return m, nil
+			return m.mousePicker(msg)
 		}
 		m.tree.Update(msg)
 		return m, nil
@@ -563,7 +563,9 @@ func (m Model) View() string {
 	}
 	view := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
 	if m.picker != nil { // after zone.Scan, so no zone marker is cut
-		view = overlay(view, m.picker.View(m.width, m.height), m.width, m.height, theme.Fg(m.theme.Backdrop))
+		pop := m.picker.View(m.width, m.height)
+		x, y := m.picker.Origin(m.width, m.height)
+		view = overlay(view, pop, x, y, theme.Fg(m.theme.Backdrop))
 	}
 	return view
 }

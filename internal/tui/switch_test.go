@@ -180,3 +180,45 @@ func TestSwitchReportsADetachedHead(t *testing.T) {
 		t.Errorf("flash lacks the detached note:\n%s", v)
 	}
 }
+
+// clickRow clicks the i-th visible branch of the open picker.
+func clickRow(m tea.Model, i int) (tea.Model, tea.Cmd) {
+	mm := m.(Model)
+	x, y := mm.picker.Origin(mm.width, mm.height)
+	return m.Update(tea.MouseMsg{X: x + 3, Y: y + 4 + i, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+}
+
+func TestSwitchClickOnABranchSwitches(t *testing.T) {
+	m, f := newSwitchModel(t, submodule.Loss{})
+	m = openPicker(t, m)
+	m.View() // the popup learns where it is drawn
+	m, cmd := clickRow(m, 1)
+	if m.(Model).picker != nil {
+		t.Error("the click must close the picker")
+	}
+	settle(m, cmd)
+	if len(f.switched) != 1 || f.switched[0] != " refs/remotes/origin/feat" {
+		t.Fatalf("switched %q, want the clicked branch", f.switched)
+	}
+}
+
+func TestSwitchClickOutsideClosesAndWheelMoves(t *testing.T) {
+	m, f := newSwitchModel(t, submodule.Loss{})
+	m = openPicker(t, m)
+	m.View()
+	m, _ = m.Update(tea.MouseMsg{Button: tea.MouseButtonWheelDown, Action: tea.MouseActionPress})
+	if b := m.(Model).picker.Selected(); b == nil || b.Name != "origin/feat" {
+		t.Errorf("wheel down selected %v", b)
+	}
+	// a click that releases or sits inside the popup's frame does nothing
+	mm := m.(Model)
+	x, y := mm.picker.Origin(mm.width, mm.height)
+	m, _ = m.Update(tea.MouseMsg{X: x + 3, Y: y + 1, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	if m.(Model).picker == nil {
+		t.Fatal("a click on the title must keep the popup open")
+	}
+	m, _ = m.Update(tea.MouseMsg{X: 0, Y: 0, Button: tea.MouseButtonLeft, Action: tea.MouseActionPress})
+	if m.(Model).picker != nil || len(f.switched) != 0 {
+		t.Fatal("a click outside must close without switching")
+	}
+}

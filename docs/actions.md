@@ -218,8 +218,10 @@ branches.
 | `enter` | Switch to the selected branch |
 | `esc` | Close |
 
-Mouse and all other keys are ignored while the popup is open. A header
-selection switches the superproject.
+Mouse: a click on a branch switches to it (like `enter`), the wheel moves the
+selection, a click outside the popup closes it; a click on the title, the
+search line or an empty row does nothing. Everything else is ignored while the
+popup is open. A header selection switches the superproject.
 
 ### Effect
 

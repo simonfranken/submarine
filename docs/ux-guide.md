@@ -353,6 +353,9 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 - Click a row: select it. Click the header: select the superproject.
 - Click `▸` / `▾`: select and toggle.
 - Scroll wheel: move the selection.
+- In the [branch popup](#switch-branch): click a branch to switch to it,
+  wheel to move, click outside to close. The popup is hit-tested by its own
+  position, not with bubblezone, since it is drawn after `zone.Scan`.
 
 ## Accessibility and terminals
 

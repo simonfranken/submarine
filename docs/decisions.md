@@ -376,7 +376,9 @@ restores below, without staging.
   list itself uses none; `f` refreshes remote branches.
 - *Popup.* The first overlay: drawn over the finished view (after
   `zone.Scan`, so no zone marker is cut); the keys go to the picker while it
-  is open. The backdrop is dimmed: stripped of its styles and drawn in
+  is open, and so does the mouse: the popup remembers where it was drawn and
+  tests clicks itself (bubblezone can't see it, it is drawn after the scan).
+  A click on a branch switches, like `enter`; a click outside closes. The backdrop is dimmed: stripped of its styles and drawn in
   `Backdrop`, an adaptive 256-color grey (238 dark / 252 light). `Muted`
   (ANSI 8) was too bright to set the popup apart, and ANSI faint (SGR 2) is
   ignored by some terminals. Like `Bar` and `Selected` it carries no meaning,

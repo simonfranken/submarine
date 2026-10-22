@@ -35,6 +35,7 @@ type Model struct {
 	loading bool
 	err     error
 	spinner string
+	w, h    int // size of the popup as last rendered, for hit tests
 }
 
 // New returns a picker in the loading state.
@@ -177,11 +178,40 @@ func (m *Model) View(termWidth, termHeight int) string {
 	lines = append(lines, body[:m.rows]...)
 	lines = append(lines, muted.Render(ansi.Truncate("↑↓ select · enter switch · esc cancel", inner, "…")))
 
-	return lipgloss.NewStyle().
+	out := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(m.theme.Border).
 		Padding(0, 1).
 		Render(strings.Join(lines, "\n"))
+	m.w, m.h = lipgloss.Width(out), lipgloss.Height(out)
+	return out
+}
+
+// Origin is the top-left cell of the popup, centered in a terminal of the
+// given size. Valid after View.
+func (m *Model) Origin(termWidth, termHeight int) (x, y int) {
+	return max((termWidth-m.w)/2, 0), max((termHeight-m.h)/2, 0)
+}
+
+// listTop is the line of the popup (border, title, search, rule) where the
+// list starts.
+const listTop = 4
+
+// Click handles a left click at cell (x, y) of a terminal of the given size.
+// inside reports whether the click was within the popup. If it hit a branch,
+// that branch is selected and hit is true.
+func (m *Model) Click(x, y, termWidth, termHeight int) (inside, hit bool) {
+	ox, oy := m.Origin(termWidth, termHeight)
+	x, y = x-ox, y-oy
+	if x < 0 || y < 0 || x >= m.w || y >= m.h {
+		return false, false
+	}
+	row := y - listTop
+	if m.loading || m.err != nil || x == 0 || x == m.w-1 || row < 0 || row >= m.rows || m.offset+row >= len(m.shown) {
+		return true, false
+	}
+	m.cursor = m.offset + row
+	return true, true
 }
 
 // row renders one branch: the name, right-aligned the short SHA and age.

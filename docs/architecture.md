@@ -28,7 +28,7 @@ internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
   keys.go                     key bindings (also feed the help view)
   restore.go, switch.go       restore / switch flows; a switch reuses restoreState
-  overlay.go                  draws the picker centered over the finished view
+  overlay.go                  draws the picker over the finished view at the position the picker reports
   msgs.go                     tree/status/fetch/change messages
   refresh.go                  reloader: one load per key, coalesced reruns
   theme/                      colors, glyphs, issue words, change letters, level styles

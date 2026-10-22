@@ -77,19 +77,49 @@ func (m Model) pickBranch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case tea.KeyPgDown:
 		m.picker.PageDown()
 	case tea.KeyEnter:
-		b := m.picker.Selected()
-		if b == nil {
-			return m, nil
-		}
-		s := m.byPath[m.pickerPath]
-		m.picker = nil
-		if s == nil || m.restore != nil {
-			return m, nil
-		}
-		m.restore = &restoreState{path: s.Path, name: restoreName(s), branch: b}
-		return m.checkRestore()
+		return m.confirmPick()
 	default:
 		return m, m.picker.Update(msg)
+	}
+	return m, nil
+}
+
+// confirmPick closes the picker and switches to the selected branch, with
+// the same check and question as a restore.
+func (m Model) confirmPick() (tea.Model, tea.Cmd) {
+	b := m.picker.Selected()
+	if b == nil {
+		return m, nil
+	}
+	s := m.byPath[m.pickerPath]
+	m.picker = nil
+	if s == nil || m.restore != nil {
+		return m, nil
+	}
+	m.restore = &restoreState{path: s.Path, name: restoreName(s), branch: b}
+	return m.checkRestore()
+}
+
+// mousePicker handles the mouse while the picker is open: the wheel moves
+// the selection, a click on a branch switches to it, a click outside the
+// popup closes it.
+func (m Model) mousePicker(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		m.picker.Up()
+	case tea.MouseButtonWheelDown:
+		m.picker.Down()
+	case tea.MouseButtonLeft:
+		if msg.Action != tea.MouseActionPress {
+			return m, nil
+		}
+		inside, hit := m.picker.Click(msg.X, msg.Y, m.width, m.height)
+		switch {
+		case hit:
+			return m.confirmPick()
+		case !inside:
+			m.picker = nil
+		}
 	}
 	return m, nil
 }
