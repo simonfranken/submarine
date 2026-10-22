@@ -27,6 +27,9 @@ the questions you actually have:
 - **Live.** Follows changes you make in other shells within about two
   seconds. It never fetches on its own: the header shows when you last did,
   `f` fetches everything.
+- **Fix it from the same screen.** Restore a repository to exactly what git
+  records (`x`), or switch it to another branch (`b`). Both ask first if work
+  would be lost.
 - **Built for dozens to hundreds of submodules.** Each status loads
   asynchronously, so the UI never freezes.
 
@@ -94,6 +97,44 @@ Select a submodule and press `c`. Its absolute directory lands in your
 clipboard, ready for `cd <paste>`. It works over SSH too (OSC 52; in tmux,
 `set -g set-clipboard on`).
 
+### Restore with `x`
+
+Select a submodule (or the header for the whole superproject) and press `x`.
+Its worktree becomes exactly what git records, and so do all submodules
+below it: changes are reset, untracked files removed, merges and rebases
+ended, missing submodules cloned. Staged pins are kept. If something would be
+lost, you are asked first:
+
+```
+ Restore src/app? Discards 7 changed files in 3 repositories.      y restore · n cancel
+```
+
+`y` restores, any other key cancels. Without a loss it runs at once. For a
+submodule with a staged pin, `x` first asks whether to restore to the staged
+pin (`s`) or the committed one (`c`, which unstages it).
+
+### Switch a branch with `b`
+
+Press `b` on a submodule (or the header for the superproject). A popup lists
+the local and remote branches, newest first; type to filter.
+
+```
+ ╭──────────────────────────────────────────────────────────╮
+ │ Switch libs/feature                                      │
+ │ / sea                                                    │
+ │ ──────────────────────────────────────────────────────── │
+ │   origin/feat/search                    58a2bf1  2h ago  │
+ │ ↑↓ select · enter switch · esc cancel                    │
+ ╰──────────────────────────────────────────────────────────╯
+```
+
+`↑` `↓` select, `enter` switches, `esc` cancels. The tip of the branch
+becomes the submodule's staged pin and it is restored to it, with HEAD on the
+branch. Picking `origin/feat` creates a local `feat` that tracks it; an
+existing local branch of that name is never moved. Like restore, it asks
+first if work would be lost. The list is read from disk, so press `f` first
+to see new remote branches.
+
 ### Fetch and reload
 
 `f` fetches all repositories again, `r` reloads everything after you edited
@@ -117,12 +158,14 @@ files.
 | `?` | Full help |
 | `q` | Quit |
 
-The mouse works too: click to select, click `▸` to toggle, wheel to move.
+The mouse works too: click to select, click `▸` to toggle, wheel to move. In
+the branch popup, click a branch to switch to it, use the wheel to move, and
+click outside to close it.
 
 ## Status
 
-A prototype. Browsing is complete, and `x` restores a submodule or the whole
-superproject, and `b` switches its branch. More write actions (stage pin) are being specified in
+A prototype. Browsing is complete. Two write actions exist: restore (`x`)
+and switch branch (`b`). More (stage pin) are being specified in
 [docs/actions.md](docs/actions.md).
 
 ## Documentation
