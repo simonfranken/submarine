@@ -35,17 +35,20 @@ the questions you actually have:
 curl -fsSL https://git.simon-franken.de/simonfranken/submarine/raw/branch/main/install.sh | sh
 ```
 
-Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
-`~/.local/bin`. Update later with `submarine update`.
+Installs `sub` and `submarine` (linux/macOS, amd64/arm64) to `~/.local/bin`.
+Both names start the same program; the examples below use the shorter `sub`.
+Update later with `sub update`.
 
 ## Try it
 
 ```sh
-submarine                  # the repository in the current directory
-submarine ~/code/project   # any directory inside a repository
-submarine --no-fetch       # skip the background fetch
-submarine --mock           # built-in sample data, no repository needed
+sub                  # the repository in the current directory
+sub ~/code/project   # any directory inside a repository
+sub --no-fetch       # skip the background fetch
+sub --mock           # built-in sample data, no repository needed
 ```
+
+`submarine` works everywhere `sub` does, e.g. `submarine --mock`.
 
 ## Examples
 
