@@ -281,13 +281,14 @@ the term*.
 
 | Phase | Line |
 |---|---|
+| the submodule has a staged pin | yellow `Restore src/app to`, `s staged pin · c committed pin (unstages it)`, right-aligned `any other key cancels` |
 | reading what is lost | spinner, muted `checking src/app…` |
 | something would be lost | yellow `Restore src/app?`, red `Discards 7 changed files in 3 repositories, 2 commits on no branch, 1 untracked repository.`, right-aligned `y restore · n cancel` |
 | running | spinner, yellow `restoring src/app…` |
 | failed | red `restore of src/app failed: <git's message>`, until the next key |
 
-`y` restores, any other key cancels; the keys are not passed on while the
-question is open. Without a loss there is no question. Success flashes
+`y` restores, any other key cancels; the keys are not passed on while a
+question is open. After `c` the name reads `src/app to the committed pin`. Without a loss there is no question. Success flashes
 `restored src/app` in the footer. For the header the name is `the
 superproject`. This line takes precedence over the filter line and the
 problems-only notice.

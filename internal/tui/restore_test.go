@@ -25,6 +25,7 @@ func TestLossText(t *testing.T) {
 		{submodule.Loss{Files: 1, Modules: 1}, "1 changed file"},
 		{submodule.Loss{Files: 7, Modules: 3, Commits: 2, Repositories: 1}, "7 changed files in 3 repositories, 2 commits on no branch, 1 untracked repository"},
 		{submodule.Loss{Operations: 1, Modules: 1, Unknown: 2}, "1 operation in progress, 2 repositories of unknown state"},
+		{submodule.Loss{StagedPins: 2, Modules: 1}, "2 staged pins"},
 	}
 	for _, c := range cases {
 		if got := lossText(c.in); got != c.want {
@@ -38,14 +39,16 @@ type fakeRestorer struct {
 	submodule.Provider
 	loss     submodule.Loss
 	restored []string
+	to       []submodule.RestoreTarget
 }
 
-func (f *fakeRestorer) RestoreLoss(context.Context, string) (submodule.Loss, error) {
+func (f *fakeRestorer) RestoreLoss(context.Context, string, submodule.RestoreTarget) (submodule.Loss, error) {
 	return f.loss, nil
 }
 
-func (f *fakeRestorer) Restore(_ context.Context, path string) error {
+func (f *fakeRestorer) Restore(_ context.Context, path string, to submodule.RestoreTarget) error {
 	f.restored = append(f.restored, path)
+	f.to = append(f.to, to)
 	return nil
 }
 
@@ -149,5 +152,38 @@ func TestRestoreWithoutRestorerSaysSo(t *testing.T) {
 	m, _ = press(m, "x")
 	if m.(Model).restore != nil {
 		t.Fatal("the mock can't restore")
+	}
+}
+
+func TestRestoreOfAStagedPinAsksWhichPin(t *testing.T) {
+	m, f := newRestoreModel(t, submodule.Loss{})
+	mm := m.(Model)
+	var staged *submodule.Submodule
+	submodule.Walk(mm.repo.Submodules, func(s *submodule.Submodule) {
+		if staged == nil && s.Children == nil {
+			staged = s
+		}
+	})
+	staged.Status = &submodule.Status{PinStaged: true, Pin: submodule.PinInfo{Pushed: true}}
+	mm.tree.Select(staged.Path)
+	if mm.tree.Selected() != staged {
+		t.Fatalf("setup: selected %v", mm.tree.Selected())
+	}
+	m = mm
+
+	m, _ = press(m, "x")
+	if m.(Model).restore == nil || m.(Model).restore.phase != restoreChoosing {
+		t.Fatalf("want the pin question, got %+v", m.(Model).restore)
+	}
+	m, cmd := press(m, "c")
+	var next tea.Cmd
+	for _, msg := range run(cmd) {
+		if l, ok := msg.(lossMsg); ok {
+			m, next = m.Update(l)
+		}
+	}
+	feed(m, next)
+	if len(f.to) != 1 || f.to[0] != submodule.RestoreCommitted || f.restored[0] != staged.Path {
+		t.Fatalf("restored %q to %v, want %s to the committed pin", f.restored, f.to, staged.Path)
 	}
 }

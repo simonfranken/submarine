@@ -336,6 +336,15 @@ the same for every submodule of the target tree, initializing missing ones.
   clone a missing submodule and fetch a missing commit, non-interactively and
   with a timeout, because "no child module missing" cannot be met offline.
 - Key `x`, not `R`, which sits next to `r` (reload).
+- *Staged pins are kept, at every depth.* The first version reset the
+  superproject's index and so dropped staged pins silently (they were not
+  counted as a loss). A staged pin is a decision, not drift: each
+  repository's staged pins are put back after its reset and are the targets
+  of its submodules. Unstaging gets a place instead: for a submodule with a
+  staged pin, `x` asks *staged* (`s`) or *committed* (`c`, unstages it). That
+  asks only where the intent is ambiguous and needs no extra key. Staged pins
+  of a repository that moves to another commit can't be carried over and
+  count as a loss.
 **Consequences.** `Restorer` is a new optional provider interface; the mock
 does not implement it. Restore is idempotent and can be repeated after a
 failure. It takes the time of its slowest clone; there is no per-repository

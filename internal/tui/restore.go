@@ -15,7 +15,8 @@ import (
 type restorePhase int
 
 const (
-	restoreChecking restorePhase = iota // reading what would be lost
+	restoreChoosing restorePhase = iota // staged or committed pin?
+	restoreChecking                     // reading what would be lost
 	restoreAsking                       // waiting for y / n
 	restoreRunning
 )
@@ -24,6 +25,7 @@ const (
 type restoreState struct {
 	path, name string // name is how the footer calls it
 	phase      restorePhase
+	to         submodule.RestoreTarget
 	loss       submodule.Loss
 }
 
@@ -40,10 +42,11 @@ type restoreDoneMsg struct {
 }
 
 // startRestore checks what restoring the selection would discard. If nothing
-// would be lost it restores at once, else it asks first.
+// would be lost it restores at once, else it asks first. A submodule with a
+// staged pin first asks which pin to restore to.
 func (m Model) startRestore() (tea.Model, tea.Cmd) {
 	s := m.tree.Selected()
-	r, ok := m.provider.(submodule.Restorer)
+	_, ok := m.provider.(submodule.Restorer)
 	var flash string
 	switch {
 	case s == nil:
@@ -60,13 +63,43 @@ func (m Model) startRestore() (tea.Model, tea.Cmd) {
 	}
 
 	m.restore = &restoreState{path: s.Path, name: restoreName(s)}
+	if !s.IsRoot() && s.Status != nil && s.Status.PinStaged {
+		m.restore.phase = restoreChoosing
+		m.layout()
+		return m, nil
+	}
+	return m.checkRestore()
+}
+
+// checkRestore reads what the restore would discard.
+func (m Model) checkRestore() (tea.Model, tea.Cmd) {
+	m.restore.phase = restoreChecking
 	m.layout()
-	ctx, path := m.ctx, s.Path
+	r := m.provider.(submodule.Restorer)
+	ctx, path, to := m.ctx, m.restore.path, m.restore.to
 	check := func() tea.Msg {
-		loss, err := r.RestoreLoss(ctx, path)
+		loss, err := r.RestoreLoss(ctx, path, to)
 		return lossMsg{path, loss, err}
 	}
 	return m, tea.Batch(check, m.tick())
+}
+
+// choosePin handles a key while the restore asks for the pin: s the staged
+// one, c the committed one (which unstages it), anything else cancels.
+func (m Model) choosePin(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	switch {
+	case msg.Type == tea.KeyCtrlC:
+		return m, tea.Quit
+	case msg.String() == "s":
+		m.restore.to = submodule.RestoreStaged
+		return m.checkRestore()
+	case msg.String() == "c":
+		m.restore.to = submodule.RestoreCommitted
+		return m.checkRestore()
+	}
+	m.restore = nil
+	m.layout()
+	return m, nil
 }
 
 // lossChecked reacts to the check: restore, or ask.
@@ -107,8 +140,8 @@ func (m Model) runRestore() (tea.Model, tea.Cmd) {
 	m.restore.phase = restoreRunning
 	m.layout()
 	r := m.provider.(submodule.Restorer)
-	ctx, path := m.ctx, m.restore.path
-	run := func() tea.Msg { return restoreDoneMsg{path, r.Restore(ctx, path)} }
+	ctx, path, to := m.ctx, m.restore.path, m.restore.to
+	run := func() tea.Msg { return restoreDoneMsg{path, r.Restore(ctx, path, to)} }
 	return m, tea.Batch(run, m.tick())
 }
 
@@ -117,7 +150,7 @@ func (m Model) runRestore() (tea.Model, tea.Cmd) {
 func (m Model) restoreDone(msg restoreDoneMsg) (tea.Model, tea.Cmd) {
 	name := "the superproject"
 	if m.restore != nil {
-		name = m.restore.name
+		name = m.restore.name + m.restore.toText()
 	}
 	m.restore = nil
 	var cmds []tea.Cmd
@@ -131,6 +164,15 @@ func (m Model) restoreDone(msg restoreDoneMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// toText is " to the committed pin" if that was chosen; the staged pin is the
+// usual target and needs no words.
+func (r *restoreState) toText() string {
+	if r.to == submodule.RestoreCommitted {
+		return " to the committed pin"
+	}
+	return ""
+}
+
 func restoreName(s *submodule.Submodule) string {
 	if s == nil || s.IsRoot() {
 		return "the superproject"
@@ -142,13 +184,19 @@ func restoreName(s *submodule.Submodule) string {
 func (m Model) restoreView() string {
 	r := m.restore
 	left, right := "", ""
+	key := func(k string) string { return theme.Fg(m.theme.Text).Bold(true).Render(k) }
+	muted := func(s string) string { return theme.Fg(m.theme.Muted).Render(s) }
 	switch r.phase {
+	case restoreChoosing:
+		left = theme.Fg(m.theme.Warn).Render("Restore "+r.name+" to") + "  " +
+			key("s") + muted(" staged pin · ") + key("c") + muted(" committed pin (unstages it)")
+		right = muted("any other key cancels")
 	case restoreChecking:
 		left = theme.Fg(m.theme.Primary).Render(m.spinner.View()) + " " + theme.Fg(m.theme.Muted).Render("checking "+r.name+"…")
 	case restoreRunning:
-		left = theme.Fg(m.theme.Primary).Render(m.spinner.View()) + " " + theme.Fg(m.theme.Warn).Render("restoring "+r.name+"…")
+		left = theme.Fg(m.theme.Primary).Render(m.spinner.View()) + " " + theme.Fg(m.theme.Warn).Render("restoring "+r.name+r.toText()+"…")
 	case restoreAsking:
-		left = theme.Fg(m.theme.Warn).Render("Restore "+r.name+"?") + " " +
+		left = theme.Fg(m.theme.Warn).Render("Restore "+r.name+r.toText()+"?") + " " +
 			theme.Fg(m.theme.Danger).Render("Discards "+lossText(r.loss)+".")
 		right = theme.Fg(m.theme.Text).Bold(true).Render("y") + theme.Fg(m.theme.Muted).Render(" restore · ") +
 			theme.Fg(m.theme.Text).Bold(true).Render("n") + theme.Fg(m.theme.Muted).Render(" cancel")
@@ -191,6 +239,9 @@ func lossText(l submodule.Loss) string {
 	}
 	if l.Repositories > 0 {
 		parts = append(parts, plural(l.Repositories, "untracked repository", "untracked repositories"))
+	}
+	if l.StagedPins > 0 {
+		parts = append(parts, plural(l.StagedPins, "staged pin", "staged pins"))
 	}
 	if l.Unknown > 0 {
 		parts = append(parts, plural(l.Unknown, "repository of unknown state", "repositories of unknown state"))

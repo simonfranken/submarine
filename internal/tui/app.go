@@ -159,7 +159,7 @@ func (m *Model) startFetch() tea.Cmd {
 
 // busy reports whether something shows a spinner.
 func (m Model) busy() bool {
-	if m.repo == nil || m.fetch.Running || (m.restore != nil && m.restore.phase != restoreAsking) {
+	if m.repo == nil || m.fetch.Running || (m.restore != nil && (m.restore.phase == restoreChecking || m.restore.phase == restoreRunning)) {
 		return true
 	}
 	loading := m.repo.Root != nil && m.repo.Root.Status == nil && m.repo.Root.Err == nil
@@ -331,8 +331,13 @@ func (m Model) changed(msg changeMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	k := m.keys
-	if m.restore != nil && m.restore.phase == restoreAsking {
-		return m.answerRestore(msg)
+	if m.restore != nil {
+		switch m.restore.phase {
+		case restoreChoosing:
+			return m.choosePin(msg)
+		case restoreAsking:
+			return m.answerRestore(msg)
+		}
 	}
 	if m.notice != "" {
 		m.notice = ""

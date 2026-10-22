@@ -40,9 +40,18 @@ type Locator interface {
 type Restorer interface {
 	// RestoreLoss reports what Restore would discard, read from the disk at
 	// this moment.
-	RestoreLoss(ctx context.Context, path string) (Loss, error)
-	Restore(ctx context.Context, path string) error
+	RestoreLoss(ctx context.Context, path string, to RestoreTarget) (Loss, error)
+	Restore(ctx context.Context, path string, to RestoreTarget) error
 }
+
+// RestoreTarget is the pin a submodule is restored to. It doesn't matter for
+// the superproject, whose target is always HEAD.
+type RestoreTarget int
+
+const (
+	RestoreStaged    RestoreTarget = iota // the pin in the parent's index: a staged pin is kept and used
+	RestoreCommitted                      // the pin in the parent's HEAD: a staged pin is unstaged
+)
 
 // Loss is what a restore discards. The zero Loss means nothing is lost.
 type Loss struct {
@@ -51,6 +60,7 @@ type Loss struct {
 	Operations   int // merges, rebases, cherry-picks, reverts in progress
 	Commits      int // commits that no branch, tag or remote ref reaches
 	Repositories int // untracked repositories with their own .git directory
+	StagedPins   int // staged pins of repositories that move to another commit
 	Unknown      int // repositories whose state could not be read
 }
 
@@ -65,6 +75,7 @@ func (l Loss) Add(o Loss) Loss {
 		Operations:   l.Operations + o.Operations,
 		Commits:      l.Commits + o.Commits,
 		Repositories: l.Repositories + o.Repositories,
+		StagedPins:   l.StagedPins + o.StagedPins,
 		Unknown:      l.Unknown + o.Unknown,
 	}
 }

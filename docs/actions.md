@@ -24,38 +24,65 @@ the tip in the submodule, then `s`".
 Makes the selected repository, and everything below it, exactly what git
 records. It works on any submodule and on the superproject (header
 selected). Restoring the superproject gives the exact project that the
-current root commit specifies.
+current root commit specifies, with the pins you have staged.
 
 ### Target
 
 | Selected | Target commit | Branch |
 |---|---|---|
 | Superproject | `HEAD` | stays on the current branch |
-| Submodule | The pin in the parent's **index** (what the UI shows as *Pinned*) | see [Branches](#branches) |
-| Nested submodule, during the recursion | The gitlink in the restored parent's commit | as for a submodule |
+| Submodule | The pin in the parent's **index** (what the UI shows as *Pinned*); with a staged pin you choose, see below | see [Branches](#branches) |
+| Nested submodule, during the recursion | The gitlink in the restored parent's index | as for a submodule |
 
-Restoring the superproject resets its index too, so **staged pins are
-discarded**: afterwards every pin is the one in `HEAD`. Restoring a submodule
-does not touch the parent's index, so a staged pin of that submodule stays
-and is the target.
+**Staged pins are kept, at every depth.** A staged pin is a decision, not
+drift. Each repository's files are reset to its `HEAD`, but its staged pins
+stay in its index, and the submodules below are restored to them. So a
+nested submodule with a staged pin and uncommitted changes keeps the pin
+and is reset to it; its changes are discarded (and listed in the question).
+
+**Choosing the pin.** If the selected submodule has a staged pin itself, `x`
+first asks which pin to restore to:
+
+```
+Restore libs/staged to  s staged pin · c committed pin (unstages it)     any other key cancels
+```
+
+- `s`: the staged pin, which stays staged.
+- `c`: the committed pin (the gitlink in the parent's `HEAD`). The parent's
+  index is set back to it, which is how a pin is unstaged in submarine.
+
+The loss check then runs for the chosen pin (the two can differ: a staged
+commit that exists only locally is lost by `c`, not by `s`).
+
+Two exceptions, where a staged pin is not kept:
+
+- **The repository moves.** If a repository is off its pin, restore checks
+  out another commit; staged pins in its own index belonged to the old one.
+  They are counted as a loss (`2 staged pins`), so the question appears. Its
+  submodules follow the target commit's tree.
+- **An added, not yet committed submodule** is no staged pin: its
+  `.gitmodules` entry is reset with the other files. Its directory then
+  counts as an untracked file.
 
 ### Postconditions
 
 After a successful restore of repository R with target T:
 
-1. **R's HEAD is T.** The index and the worktree equal T's tree. No
-   modified, added, removed or conflicted files remain.
+1. **R's HEAD is T.** The index and the worktree equal T's tree, except for
+   the staged pins that were kept. No modified, added, removed or conflicted
+   files remain.
 2. **No in-progress operation** remains in R: merge, rebase, cherry-pick,
    revert.
 3. **No untracked files or directories** remain in R. This includes leftover
    directories of submodules that T no longer has (*untracked repository*).
    Ignored files are kept.
-4. **Every submodule that T records is present and initialized**, even if
+4. **Every submodule that R's index records is present and initialized**, even if
    it was never initialized, is inactive (`submodule.<name>.active`) or has
    `update = none / merge / rebase` configured. Its URL comes from T's
    `.gitmodules` (synced into the config).
 5. **Each of those submodules is restored the same way**, with its gitlink
-   in T as its target, recursively at any depth.
+   in R's index (T's, or a kept staged pin) as its target, recursively at
+   any depth.
 
 So the subtree shows `in sync` everywhere, except for states restore does
 not change: `unpushed`, behind/ahead of the ref, and `detached HEAD on pin`.
@@ -85,6 +112,7 @@ Restore discards work. The things it can lose:
 | Untracked files | `changed` (untracked) |
 | Conflicts and in-progress operations | `conflict`; merge, rebase, cherry-pick, revert state |
 | Commits | A detached HEAD off the pin whose commits are on no branch, tag or remote ref (only the reflog still has them) |
+| Staged pins | Staged pins in a repository that restore moves to another commit (see [Target](#target)) |
 | Repositories | An untracked directory that is a repository with its **own** `.git` directory (a clone that was never added as a submodule). Its commits may exist nowhere else. A removed submodule whose git directory is absorbed into `.git/modules` loses only its worktree. Its objects stay |
 
 Nothing else is lost. Branches, stashes, remote refs, ignored files and
@@ -148,14 +176,18 @@ cat-file / fetch --all            # only if T is missing locally
 rebase|cherry-pick|revert --quit  # whichever is in progress; --quit, not --abort: no ref moves
 checkout --force --detach T       # only if HEAD is not T, so a branch is never moved
 reset --hard                      # also ends a merge
+update-index --cacheinfo …        # put the staged pins back (only if HEAD did not move)
 clean -ffd                        # -ff: untracked repositories too; ignored files stay
 submodule sync
 submodule update --init --checkout --force -- <not yet initialized children>
-# then every gitlink of T's tree (ls-tree -r T) is restored the same way
+# then every gitlink of the index (ls-files -s) is restored the same way
 ```
 
 `--checkout` overrides `submodule.<name>.update`, and the explicit paths
 override `submodule.<name>.active`, so no child module is skipped.
+
+With `c` the parent's index gets the committed pin first (`update-index
+--cacheinfo` in the parent).
 
 `RestoreLoss` (`lossOf`) follows the repositories on disk: per repository
 `status` (without submodules), the in-progress state files, and
@@ -197,9 +229,8 @@ staging only looks at the submodule's own worktree.
 - If the checked-out commit is not pushed, it is staged anyway. The row
   then shows `unpushed` (Danger), which is the warning.
 - There is no confirmation: nothing is lost.
-- Undo: there is no unstage action. `git restore --staged <path>` in the
-  parent undoes it. Restoring the superproject also discards every staged
-  pin, together with everything else.
+- Undo: restore the submodule and choose `c` (committed pin), see
+  [Target](#target).
 
 ### Implementation note
 

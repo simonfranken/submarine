@@ -24,11 +24,15 @@ func out(t *testing.T, dir string, args ...string) string {
 func exists(path string) bool { _, err := os.Stat(path); return err == nil }
 
 // assertExact checks that the superproject at dir and every submodule below
-// it is initialized, on its pin and has no change at all.
+// it is initialized, on its pin (staged ones included) and has no change
+// besides staged pins.
 func assertExact(t *testing.T, dir string) {
 	t.Helper()
-	if s := out(t, dir, "status", "--porcelain"); s != "" {
+	if s := out(t, dir, "diff", "--name-only", "--ignore-submodules=dirty"); s != "" { // worktree vs index
 		t.Errorf("%s not clean:\n%s", dir, s)
+	}
+	if s := out(t, dir, "ls-files", "--others", "--exclude-standard"); s != "" {
+		t.Errorf("%s has untracked files:\n%s", dir, s)
 	}
 	raw, err := exec.Command("git", "-C", dir, "submodule", "status", "--recursive").Output() // the prefix is a leading space
 	if err != nil {
@@ -43,8 +47,12 @@ func assertExact(t *testing.T, dir string) {
 			continue
 		}
 		f := strings.Fields(line)
-		if s := out(t, filepath.Join(dir, f[1]), "status", "--porcelain"); s != "" {
+		sub := filepath.Join(dir, f[1])
+		if s := out(t, sub, "diff", "--name-only", "--ignore-submodules=dirty"); s != "" {
 			t.Errorf("%s not clean:\n%s", f[1], s)
+		}
+		if s := out(t, sub, "ls-files", "--others", "--exclude-standard"); s != "" {
+			t.Errorf("%s has untracked files:\n%s", f[1], s)
 		}
 	}
 }
@@ -72,7 +80,7 @@ func TestRestoreSuperprojectMakesEverythingExact(t *testing.T) {
 	conflict := filepath.Join(super, "libs", "conflict")
 	mainTip := out(t, conflict, "rev-parse", "main")
 
-	if err := p.Restore(ctx, ""); err != nil {
+	if err := p.Restore(ctx, "", submodule.RestoreStaged); err != nil {
 		t.Fatal(err)
 	}
 	assertExact(t, super)
@@ -88,8 +96,9 @@ func TestRestoreSuperprojectMakesEverythingExact(t *testing.T) {
 	if !exists(filepath.Join(super, "libs", "missing", ".git")) {
 		t.Error("libs/missing was not initialized")
 	}
-	if out(t, super, "diff", "--cached", "--name-only") != "" {
-		t.Error("staged pin survived a superproject restore")
+	// the fixture stages libs/staged and libs/conflict
+	if got := out(t, super, "diff", "--cached", "--name-only"); got != "libs/conflict\nlibs/staged" {
+		t.Errorf("staged = %q, want the staged pins kept", got)
 	}
 }
 
@@ -100,7 +109,7 @@ func TestRestoreSubmoduleKeepsStagedPinAsTarget(t *testing.T) {
 	// the fixture staged the checked-out commit; move the checkout away
 	git(t, filepath.Join(super, "libs", "staged"), "checkout", "-q", "--detach", "HEAD~1")
 
-	if err := p.Restore(context.Background(), "libs/staged"); err != nil {
+	if err := p.Restore(context.Background(), "libs/staged", submodule.RestoreStaged); err != nil {
 		t.Fatal(err)
 	}
 	if got := out(t, filepath.Join(super, "libs", "staged"), "rev-parse", "HEAD"); got != staged {
@@ -118,7 +127,7 @@ func TestRestoreLoss(t *testing.T) {
 
 	loss := func(path string) submodule.Loss {
 		t.Helper()
-		l, err := p.RestoreLoss(ctx, path)
+		l, err := p.RestoreLoss(ctx, path, submodule.RestoreStaged)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -191,7 +200,7 @@ func TestRestoreRemovesLeftoversAndEndsRebase(t *testing.T) {
 		t.Fatal("setup: no rebase in progress")
 	}
 
-	if err := p.Restore(ctx, ""); err != nil {
+	if err := p.Restore(ctx, "", submodule.RestoreStaged); err != nil {
 		t.Fatal(err)
 	}
 	for _, gone := range []string{"stray", "libs/topic"} {
@@ -205,9 +214,7 @@ func TestRestoreRemovesLeftoversAndEndsRebase(t *testing.T) {
 	if got := out(t, v, "rev-parse", "y"); got != yTip {
 		t.Errorf("branch y moved: %s -> %s", yTip, got)
 	}
-	if out(t, super, "status", "--porcelain") != "" {
-		t.Errorf("superproject not clean:\n%s", out(t, super, "status", "--porcelain"))
-	}
+	assertExact(t, super)
 }
 
 func TestRestoreClonesAMissingSubmodule(t *testing.T) {
@@ -219,7 +226,7 @@ func TestRestoreClonesAMissingSubmodule(t *testing.T) {
 	if err := os.RemoveAll(filepath.Join(super, ".git", "modules", "libs", "missing")); err != nil {
 		t.Fatal(err)
 	}
-	if err := p.Restore(context.Background(), "libs/missing"); err != nil {
+	if err := p.Restore(context.Background(), "libs/missing", submodule.RestoreStaged); err != nil {
 		t.Fatal(err)
 	}
 	if !exists(filepath.Join(super, "libs", "missing", ".git")) {
@@ -238,7 +245,7 @@ func TestRestoreReportsAnUnavailablePin(t *testing.T) {
 	bogus := "0123456789abcdef0123456789abcdef01234567"
 	git(t, super, "update-index", "--cacheinfo", "160000,"+bogus+",src/core")
 	_ = core
-	err := p.Restore(context.Background(), "src/core")
+	err := p.Restore(context.Background(), "src/core", submodule.RestoreStaged)
 	if err == nil || !strings.Contains(err.Error(), "not available") {
 		t.Fatalf("err = %v, want a message about the unavailable commit", err)
 	}
@@ -251,11 +258,77 @@ func TestRestoreIgnoresUpdateNoneAndInactive(t *testing.T) {
 	git(t, super, "config", "submodule.libs/missing.active", "false")
 	git(t, super, "config", "submodule.active", "src")
 
-	if err := p.Restore(context.Background(), ""); err != nil {
+	if err := p.Restore(context.Background(), "", submodule.RestoreStaged); err != nil {
 		t.Fatal(err)
 	}
 	if !exists(filepath.Join(super, "libs", "missing", ".git")) {
 		t.Error("libs/missing not initialized")
 	}
 	assertExact(t, super)
+}
+
+func TestRestoreKeepsNestedStagedPinAndResetsToIt(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	log := filepath.Join(super, "libs", "log")
+	nested := filepath.Join(log, "modules", "nested")
+
+	// stage a new pin of nested in libs/log, then change nested again
+	git(t, nested, "commit", "-q", "-am", "Nested work")
+	staged := out(t, nested, "rev-parse", "HEAD")
+	git(t, log, "add", "modules/nested")
+	os.WriteFile(filepath.Join(nested, "README"), []byte("more\n"), 0o644)
+
+	if l, err := p.RestoreLoss(context.Background(), "", submodule.RestoreStaged); err != nil || l.StagedPins != 0 || l.Files == 0 {
+		t.Fatalf("loss %+v, %v: want the change, not the staged pin", l, err)
+	}
+	if err := p.Restore(context.Background(), "", submodule.RestoreStaged); err != nil {
+		t.Fatal(err)
+	}
+	if got := out(t, log, "diff", "--cached", "--name-only"); got != "modules/nested" {
+		t.Errorf("libs/log staged = %q, want the nested pin", got)
+	}
+	if got := out(t, nested, "rev-parse", "HEAD"); got != staged {
+		t.Errorf("nested HEAD = %s, want the staged pin %s", got, staged)
+	}
+	assertExact(t, super)
+}
+
+func TestRestoreCommittedUnstagesThePin(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	committed := strings.Fields(out(t, super, "ls-tree", "HEAD", "libs/staged"))[2]
+
+	if err := p.Restore(context.Background(), "libs/staged", submodule.RestoreCommitted); err != nil {
+		t.Fatal(err)
+	}
+	if got := out(t, super, "diff", "--cached", "--name-only"); strings.Contains(got, "libs/staged") {
+		t.Errorf("still staged: %q", got)
+	}
+	if got := out(t, filepath.Join(super, "libs", "staged"), "rev-parse", "HEAD"); got != committed {
+		t.Errorf("HEAD = %s, want the committed pin %s", got, committed)
+	}
+}
+
+func TestRestoreLossCountsStagedPinsOfAMovingRepository(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	log := filepath.Join(super, "libs", "log")
+	nested := filepath.Join(log, "modules", "nested")
+
+	// libs/log moves on (off pin, on its branch) and stages a nested pin
+	git(t, nested, "commit", "-q", "-am", "Nested work")
+	git(t, log, "add", "modules/nested")
+	git(t, log, "commit", "-q", "--allow-empty", "-m", "Log work")
+	git(t, nested, "commit", "-q", "--allow-empty", "-m", "More nested work")
+	git(t, log, "add", "modules/nested")
+
+	l, err := p.RestoreLoss(context.Background(), "libs/log", submodule.RestoreStaged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the nested commits are on a detached HEAD that moves back: lost too
+	if l.StagedPins != 1 || l.Commits != 2 {
+		t.Errorf("loss %+v, want 1 staged pin and the 2 detached nested commits", l)
+	}
 }

@@ -132,8 +132,10 @@ commit hashes. It doesn't answer the questions users actually have:
 
 - **F56** `x` restores the selection (a submodule, or the superproject when
   the header is selected): its worktree becomes exactly what git records, and
-  so do all submodules below it, recursively. It asks first, but only if
-  something would be lost. See [actions.md](actions.md#restore).
+  so do all submodules below it, recursively. Staged pins are kept at every
+  depth. For a submodule with a staged pin it asks whether to restore to the
+  staged or the committed pin (the latter unstages it). It asks for
+  confirmation only if something would be lost. See [actions.md](actions.md#restore).
 
 Stage pin is drafted in [actions.md](actions.md#stage-pin).
 
