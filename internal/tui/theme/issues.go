@@ -32,6 +32,31 @@ func IssueWord(k submodule.IssueKind) string {
 	}
 }
 
+// StatusWord renders the state of s as one word: a spinner while loading,
+// `error`, the most severe issue with "+n" for further ones, `staged`, or a
+// muted "in sync". base is applied to every segment, e.g. to keep a row
+// background.
+func (t Theme) StatusWord(s *submodule.Submodule, base lipgloss.Style, spinner string) string {
+	seg := func(c lipgloss.TerminalColor, text string) string { return base.Foreground(c).Render(text) }
+	switch {
+	case s.Err != nil:
+		return t.LevelStyle(submodule.LevelDanger, base).Render("error")
+	case s.Status == nil:
+		return seg(t.Primary, spinner)
+	}
+	if issues := s.Status.Issues(); len(issues) > 0 {
+		out := t.LevelStyle(issues[0].Level, base).Render(IssueWord(issues[0].Kind))
+		if len(issues) > 1 {
+			out += seg(t.Muted, fmt.Sprintf(" +%d", len(issues)-1))
+		}
+		return out
+	}
+	if s.Status.PinStaged {
+		return seg(t.Info, Staged)
+	}
+	return seg(t.Muted, InSync)
+}
+
 // ChangeLetter is the one-letter label of a changed file.
 func ChangeLetter(k submodule.ChangeKind) string {
 	switch k {

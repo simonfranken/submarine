@@ -103,6 +103,24 @@ per level, red first, then yellow, so a danger can never hide inside a
 collapsed subtree and a warning is never mistaken for one.
 A descendant whose load failed (`error`) counts as one danger.
 
+## Superproject
+
+The superproject is a node with an empty `Path` (`Repo.Root`, no children;
+`Submodule.IsRoot()`) and a `Status` with `Root` set. It reuses the pin
+fields with **pin = HEAD**: `Pinned` and `CheckedOut` are HEAD, `Checkout`
+is never `CheckoutDiffers` (`CheckoutDetached` for a detached HEAD),
+`PinStaged` is false. `Issues()` is the same code; only `unpushed` says
+"HEAD not pushed to any remote" (Danger, like a submodule's pin).
+
+- **Ref** is the upstream of the current branch (`RefFromCurrentBranch`), so
+  ahead/behind agrees with the header. Closest-branch resolution is only the
+  fallback without an upstream (detached, or no upstream configured).
+- **Changes** ignore submodules (`status --ignore-submodules=all`): an off-pin
+  or staged submodule is shown by its own row, not twice. A leftover
+  directory of a submodule the branch no longer has is an untracked
+  repository.
+- `Walk` and the header counts do not include the root.
+
 ## Resolving a pin to a ref
 
 The pin is displayed as a ref, not a hash. A commit can be on several

@@ -305,3 +305,109 @@ func equal(a, b []string) bool {
 	}
 	return true
 }
+
+// newTreeWithRoot is newTree with a selectable superproject.
+func newTreeWithRoot(t *testing.T) *Model {
+	t.Helper()
+	m := New(theme.Default())
+	m.SetRoot(&submodule.Submodule{Name: "root"})
+	m.SetRoots(fixture())
+	m.SetSize(80, 20)
+	return &m
+}
+
+func TestRootIsSelectedInitially(t *testing.T) {
+	m := newTreeWithRoot(t)
+	if !m.RootSelected() {
+		t.Fatal("root not selected initially")
+	}
+	assertCursor(t, m, "")
+}
+
+func TestRootIsAboveFirstRow(t *testing.T) {
+	m := newTreeWithRoot(t)
+	m.Down()
+	assertCursor(t, m, "a")
+	if m.RootSelected() {
+		t.Error("root still selected after Down")
+	}
+	m.Up()
+	if !m.RootSelected() {
+		t.Error("Up from the first submodule should select the root")
+	}
+	m.Up() // stays
+	if !m.RootSelected() {
+		t.Error("Up on the root should stay on the root")
+	}
+
+	m.End()
+	assertCursor(t, m, "f")
+	m.Home()
+	if !m.RootSelected() {
+		t.Error("Home should select the root")
+	}
+	m.PageDown()
+	assertCursor(t, m, "f")
+	m.PageUp()
+	if !m.RootSelected() {
+		t.Error("PageUp should reach the root")
+	}
+}
+
+func TestRootNavigationKeys(t *testing.T) {
+	m := newTreeWithRoot(t)
+	m.Right() // like Down
+	assertCursor(t, m, "a")
+	m.Left() // top level, nothing to collapse: the parent is the root
+	if !m.RootSelected() {
+		t.Error("Left on a top-level submodule should select the root")
+	}
+	m.Left()
+	m.Toggle()
+	m.CollapseAll()
+	m.ExpandAll()
+	if !m.RootSelected() {
+		t.Error("fold keys must not move the root selection")
+	}
+
+	m.Down()
+	m.Down() // b
+	m.Right()
+	m.Right() // d
+	m.CollapseAll()
+	assertCursor(t, m, "b")
+}
+
+func TestReplaceRootsKeepsRootSelected(t *testing.T) {
+	m := newTreeWithRoot(t)
+	newRoot := &submodule.Submodule{Name: "root"}
+	m.SetRoot(newRoot)
+	m.ReplaceRoots(fixture())
+	if !m.RootSelected() || m.Selected() != newRoot {
+		t.Error("root selection should move to the reloaded root")
+	}
+
+	m.Down()
+	m.SetRoot(&submodule.Submodule{Name: "root"})
+	m.ReplaceRoots(fixture())
+	assertCursor(t, m, "a")
+}
+
+func TestFilterKeepsRoot(t *testing.T) {
+	m := newTreeWithRoot(t)
+	m.SetFilter("f")
+	if !m.RootSelected() {
+		t.Error("the root stays selected while filtering")
+	}
+	m.Down()
+	assertCursor(t, m, "f")
+
+	m.SetFilter("zzz") // nothing matches: the root remains, not nil
+	if !m.RootSelected() {
+		t.Error("no match should fall back to the root")
+	}
+	m.SetFilter("")
+	if !m.RootSelected() {
+		t.Error("closing the filter should keep the root")
+	}
+}

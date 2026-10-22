@@ -11,7 +11,8 @@ commit hashes. It doesn't answer the questions users actually have:
 
 ## Goals
 
-- Show **only submodules** (not files), recursively nested, as a tree.
+- Show **only submodules** (not files), recursively nested, as a tree; the
+  superproject itself is shown by the header, which is selectable.
 - Describe pins as **ref + distance** instead of a commit hash.
 - Let **problems stand out** and keep healthy submodules quiet.
 - Work comfortably with **dozens to hundreds** of submodules.
@@ -56,7 +57,7 @@ commit hashes. It doesn't answer the questions users actually have:
 
 ### Detail pane
 
-- **F20** Shows the selected submodule: full path, name, all issues in
+- **F20** Shows the selected submodule (or the superproject): full path, name, all issues in
   words, staged-pin and detached-HEAD notes.
 - **F21** Shows the resolved ref, how it was resolved, and three commits:
   **Pinned**, **Checkout** and **Tip** (SHA + subject). A checkout that
@@ -72,10 +73,19 @@ commit hashes. It doesn't answer the questions users actually have:
   shown; the rest is summarized as "n more" with their kinds. Staged and
   unstaged changes are combined.
 
+- **F25** The superproject is selectable (the header; selected on startup)
+  and has a state of its own, so a stale checkout shows up: files changed
+  or untracked, untracked repositories (e.g. a submodule clone the current
+  branch no longer has), conflicts, and HEAD not pushed. Its HEAD is compared
+  with the upstream of the branch. Submodules do not count for it, their rows
+  show them. The detail pane shows it like a submodule (HEAD and Tip instead
+  of Pinned and Checkout, a summary of all submodules instead of Children).
+  See [state-model.md](state-model.md#superproject).
+
 ### Header and footer
 
 - **F30** The header shows the superproject path, its branch and
-  ahead/behind, the number of submodules, a count per issue kind (most
+  ahead/behind, its own state word (**F25**), the number of submodules, a count per issue kind (most
   severe first), staged pins, how many are still loading, and the time since
   the last fetch.
 - **F31** The footer shows key hints; `?` toggles the full help. It
@@ -108,7 +118,7 @@ commit hashes. It doesn't answer the questions users actually have:
   A text input above the footer takes the term; `esc` closes it and removes
   the filter. A selection that is filtered out moves to the next visible
   submodule (none if nothing matches); closing the filter keeps the
-  selection. See [Filter](ux-guide.md#filter).
+  selection (the superproject if none is left). See [Filter](ux-guide.md#filter).
 
 ### Actions (planned, not implemented)
 

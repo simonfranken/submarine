@@ -48,6 +48,10 @@ func parentOf(s *submodule.Submodule) *submodule.Submodule {
 // visible any more, the closest visible one after it in display order
 // becomes the selection, else the closest one before it.
 func (m *Model) reselect(old *submodule.Submodule) {
+	if old != nil && old == m.root { // the superproject is never filtered out
+		m.cursor = old
+		return
+	}
 	visible := map[*submodule.Submodule]bool{}
 	var first *submodule.Submodule
 	for _, r := range m.rows() {
@@ -63,6 +67,9 @@ func (m *Model) reselect(old *submodule.Submodule) {
 		return
 	}
 	m.cursor = first
+	if first == nil {
+		m.cursor = m.root // nothing matches: the superproject remains
+	}
 	if old == nil || first == nil {
 		return
 	}

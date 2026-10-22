@@ -78,3 +78,14 @@ func TestHiddenIssuesCountLoadErrors(t *testing.T) {
 		t.Errorf("got %+v; want 1 danger", got)
 	}
 }
+
+func TestRootIssueWording(t *testing.T) {
+	st := &Status{Root: true}
+	got := st.Issues()
+	if len(got) != 1 || got[0].Kind != IssueUnpushed || got[0].Level != LevelDanger || got[0].Detail != "HEAD not pushed to any remote" {
+		t.Errorf("Issues() = %+v", got)
+	}
+	if !(&Submodule{}).IsRoot() || (&Submodule{Path: "a"}).IsRoot() {
+		t.Error("IsRoot should be true exactly for the empty path")
+	}
+}

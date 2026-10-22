@@ -1,7 +1,8 @@
 # submarine — documentation
 
 submarine is a terminal UI for git repositories with many (recursively nested)
-submodules. It shows **only the submodules**, as a collapsible tree, and
+submodules. It shows **the submodules**, as a collapsible tree (plus the state
+of the superproject itself in the header), and
 describes each pin as a **branch plus distance** (`origin/main ↓1`) instead of a
 bare commit hash.
 

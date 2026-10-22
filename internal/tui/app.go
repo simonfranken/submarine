@@ -166,7 +166,7 @@ func (m Model) busy() bool {
 	if m.repo == nil || m.fetch.Running {
 		return true
 	}
-	loading := false
+	loading := m.repo.Root != nil && m.repo.Root.Status == nil && m.repo.Root.Err == nil
 	submodule.Walk(m.repo.Submodules, func(s *submodule.Submodule) {
 		loading = loading || (s.Status == nil && s.Err == nil)
 	})
@@ -267,7 +267,7 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 	m.byPath = map[string]*submodule.Submodule{}
 	reload := initial || m.reloadStatuses
 	m.reloadStatuses = false
-	submodule.Walk(m.repo.Submodules, func(s *submodule.Submodule) {
+	track := func(s *submodule.Submodule) {
 		m.byPath[s.Path] = s
 		if o, ok := old[s.Path]; ok {
 			s.Status, s.Err, s.FetchErr = o.Status, o.Err, o.FetchErr
@@ -275,7 +275,12 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 		if reload || s.Status == nil {
 			cmds = append(cmds, m.reloadStatus(s.Path))
 		}
-	})
+	}
+	if m.repo.Root != nil {
+		track(m.repo.Root)
+	}
+	submodule.Walk(m.repo.Submodules, track)
+	m.tree.SetRoot(m.repo.Root)
 
 	if initial {
 		m.tree.SetRoots(m.repo.Submodules)
@@ -305,6 +310,10 @@ func (m Model) changed(msg changeMsg) (tea.Model, tea.Cmd) {
 		// superproject: pins of all submodules may have moved (local), or
 		// only its header (remote); .gitmodules: the structure changed
 		cmds = append(cmds, m.reloadTree(c.Local))
+		if c.Path == "" {
+			// the root's own state: files, HEAD, and (for a fetch) its upstream
+			cmds = append(cmds, m.reloadStatus(""))
+		}
 	default:
 		s, ok := m.byPath[c.Path]
 		if !ok {
@@ -444,6 +453,9 @@ func (m Model) copyPath() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	path := s.Path
+	if s.IsRoot() && m.repo != nil {
+		path = m.repo.Path
+	}
 	if l, ok := m.provider.(submodule.Locator); ok {
 		if dir := l.Dir(s.Path); dir != "" {
 			path = dir
@@ -488,11 +500,12 @@ func (m Model) View() string {
 			Border(lipgloss.NormalBorder(), false, false, false, true).
 			BorderForeground(m.theme.Border).
 			PaddingLeft(1).
-			Render(m.detail.View(m.tree.Selected()))
+			Render(m.detail.View(m.tree.Selected(), m.repo))
 		body = lipgloss.JoinHorizontal(lipgloss.Top, body, pane)
 	}
 
-	parts := []string{header.View(m.theme, m.repo, m.fetch, m.spinner.View(), m.width), body}
+	head := header.View(m.theme, m.repo, m.fetch, m.spinner.View(), m.width, m.tree.RootSelected())
+	parts := []string{zone.Mark(m.tree.RootZone(), head), body}
 	if m.filtering {
 		parts = append(parts, m.filterView())
 	}

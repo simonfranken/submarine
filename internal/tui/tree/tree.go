@@ -23,6 +23,7 @@ const (
 type Model struct {
 	id       string // zone prefix, unique to this instance
 	theme    theme.Theme
+	root     *submodule.Submodule // the superproject: selectable, above the first row; may be nil
 	roots    []*submodule.Submodule
 	expanded map[string]bool // keyed by Submodule.Path; kept when ancestors collapse
 	filter   string          // lower-case; empty if not filtering
@@ -37,12 +38,21 @@ func New(t theme.Theme) Model {
 	return Model{id: zone.NewPrefix(), theme: t, expanded: map[string]bool{}}
 }
 
-// SetRoots replaces the tree. All nodes start collapsed.
+// SetRoot sets the superproject, which can be selected like a row above the
+// first one. Call it before SetRoots / ReplaceRoots.
+func (m *Model) SetRoot(root *submodule.Submodule) { m.root = root }
+
+// SetRoots replaces the tree. All nodes start collapsed. The superproject is
+// selected if there is one, else the first submodule.
 func (m *Model) SetRoots(roots []*submodule.Submodule) {
 	m.roots = roots
 	m.expanded = map[string]bool{}
 	m.cursor = nil
 	m.offset = 0
+	if m.root != nil {
+		m.cursor = m.root
+		return
+	}
 	m.cursor = m.firstNode()
 }
 
@@ -54,10 +64,14 @@ func (m *Model) ReplaceRoots(roots []*submodule.Submodule) {
 	if m.cursor != nil {
 		path = m.cursor.Path
 	}
+	wasRoot := m.cursor.IsRoot() // by path: SetRoot may have installed a new node
 	m.roots = roots
 	m.cursor = nil
+	if wasRoot && m.root != nil {
+		m.cursor = m.root
+	}
 	for _, r := range m.rows() {
-		if r.kind == rowNode && r.node.Path == path {
+		if m.cursor == nil && r.kind == rowNode && r.node.Path == path {
 			m.cursor = r.node
 			break
 		}
@@ -76,8 +90,18 @@ func (m *Model) SetSize(w, h int) {
 // SetSpinner sets the frame drawn for submodules that are still loading.
 func (m *Model) SetSpinner(frame string) { m.spinner = frame }
 
-// Selected returns the submodule under the cursor, or nil.
+// Selected returns the submodule under the cursor, or nil. It is the
+// superproject (empty Path) while that is selected.
 func (m Model) Selected() *submodule.Submodule { return m.cursor }
+
+// RootSelected reports whether the superproject is selected.
+func (m Model) RootSelected() bool { return m.onRoot() }
+
+func (m Model) onRoot() bool { return m.root != nil && m.cursor == m.root }
+
+// RootZone is the zone mark of the superproject's display; a click on it
+// selects the superproject. The caller wraps the header in it.
+func (m Model) RootZone() string { return m.id + "root" }
 
 // --- navigation --------------------------------------------------------------
 
@@ -104,6 +128,10 @@ func (m *Model) Toggle() {
 
 // Right expands the selected submodule and selects its first child.
 func (m *Model) Right() {
+	if m.onRoot() {
+		m.Down()
+		return
+	}
 	if m.cursor == nil || len(m.cursor.Children) == 0 {
 		return
 	}
@@ -120,6 +148,9 @@ func (m *Model) Left() {
 		m.setExpanded(m.cursor, false)
 	case m.cursor.Parent != nil:
 		m.setExpanded(m.cursor.Parent, false)
+	case m.root != nil && !m.onRoot():
+		m.cursor = m.root // the superproject is the parent of the top level
+		m.offset = 0
 	}
 }
 
@@ -179,24 +210,37 @@ func isAncestor(a, s *submodule.Submodule) bool {
 }
 
 // moveBy moves the cursor by n submodule rows, skipping directory headers
-// and stopping at the ends.
+// and stopping at the ends. The superproject counts as a row before the
+// first one.
 func (m *Model) moveBy(n int) {
 	rows := m.rows()
 	i := m.cursorRow(rows)
-	if i < 0 {
+	if m.onRoot() {
+		i = -1
+	} else if i < 0 {
 		return
 	}
 	step := 1
 	if n < 0 {
 		step, n = -1, -n
 	}
-	for j := i + step; n > 0 && j >= 0 && j < len(rows); j += step {
-		if rows[j].kind == rowNode {
+	for j := i + step; n > 0 && j >= -1 && j < len(rows); j += step {
+		switch {
+		case j == -1:
+			if m.root != nil {
+				i = -1
+				n--
+			}
+		case rows[j].kind == rowNode:
 			i = j
 			n--
 		}
 	}
-	m.cursor = rows[i].node
+	if i < 0 {
+		m.cursor = m.root
+	} else {
+		m.cursor = rows[i].node
+	}
 	m.clampOffset()
 }
 
@@ -233,6 +277,10 @@ func (m *Model) clampOffset() {
 	if m.height <= 0 {
 		return
 	}
+	if m.onRoot() {
+		m.offset = 0
+		return
+	}
 	rows := m.rows()
 	i := m.cursorRow(rows)
 	if i < 0 {
@@ -267,6 +315,11 @@ func (m *Model) Update(msg tea.Msg) {
 		return
 	}
 	if mm.Action != tea.MouseActionPress || mm.Button != tea.MouseButtonLeft {
+		return
+	}
+	if m.root != nil && zone.Get(m.RootZone()).InBounds(mm) {
+		m.cursor = m.root
+		m.offset = 0
 		return
 	}
 	for _, r := range m.visibleRows() {
@@ -416,22 +469,7 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 	staged := s.Status != nil && s.Status.PinStaged
 	h := s.HiddenIssues()
 	stagedMark := staged && len(issues) > 0
-	var status string
-	switch {
-	case s.Err != nil:
-		status = t.LevelStyle(submodule.LevelDanger, base).Render("error")
-	case s.Status == nil:
-		status = seg(t.Primary, m.spinner)
-	case len(issues) > 0:
-		status = t.LevelStyle(issues[0].Level, base).Render(theme.IssueWord(issues[0].Kind))
-		if len(issues) > 1 {
-			status += seg(t.Muted, fmt.Sprintf(" +%d", len(issues)-1))
-		}
-	case staged:
-		status = seg(t.Info, theme.Staged)
-	default:
-		status = seg(t.Muted, theme.InSync)
-	}
+	status := t.StatusWord(s, base, m.spinner)
 	if stagedMark || collapsed && h.Staged > 0 {
 		status += pad(1) + seg(t.Info, t.Glyphs.Staged)
 	}

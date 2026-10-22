@@ -40,13 +40,15 @@ func (m Model) PaletteVisible() bool { return m.height >= paletteMinHeight }
 func (m *Model) SetSize(w, h int)        { m.width, m.height = w, h }
 func (m *Model) SetSpinner(frame string) { m.spinner = frame }
 
-func (m Model) View(s *submodule.Submodule) string {
+// View renders s; repo is the loaded superproject (nil while loading), which
+// the superproject's own view needs for its path and submodule summary.
+func (m Model) View(s *submodule.Submodule, repo *submodule.Repo) string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
 	var lines []string
 	if s != nil {
-		lines = m.lines(s)
+		lines = m.lines(s, repo)
 	}
 	for i, l := range lines {
 		lines[i] = ansi.Truncate(l, m.width, "…")
@@ -68,12 +70,17 @@ func (m Model) View(s *submodule.Submodule) string {
 	return body + "\n" + palette
 }
 
-func (m Model) lines(s *submodule.Submodule) []string {
+func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	t := m.theme
 	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
 	label := func(l string) string { return muted.Width(labelWidth).Render(l) }
 
-	dir := path.Dir(s.Path)
+	root := s.IsRoot() && repo != nil
+	full := s.Path
+	if root {
+		full = repo.Path
+	}
+	dir := path.Dir(full)
 	if dir == "." {
 		dir = ""
 	} else {
@@ -104,7 +111,11 @@ func (m Model) lines(s *submodule.Submodule) []string {
 		out = append(out, theme.Fg(t.Info).Width(labelWidth).Render(theme.Staged)+text.Render("pin change staged, not committed"))
 	}
 	if st.Checkout == submodule.CheckoutDetached {
-		out = append(out, label("")+muted.Render("detached HEAD on pin"))
+		text := "detached HEAD on pin"
+		if st.Root {
+			text = "detached HEAD"
+		}
+		out = append(out, label("")+muted.Render(text))
 	}
 	if st.Changes != nil {
 		out = append(out, "")
@@ -141,15 +152,19 @@ func (m Model) lines(s *submodule.Submodule) []string {
 		}
 		return label(name) + shaStyle.Render(c.SHA) + " " + text.Render(c.Subject)
 	}
-	out = append(out,
-		commitLine("Pinned", st.Pinned, false),
-		commitLine("Checkout", st.CheckedOut, st.Checkout == submodule.CheckoutDiffers),
-		commitLine("Tip", st.Tip, false),
-	)
+	if st.Root {
+		out = append(out, commitLine("HEAD", st.Pinned, false), commitLine("Tip", st.Tip, false))
+	} else {
+		out = append(out,
+			commitLine("Pinned", st.Pinned, false),
+			commitLine("Checkout", st.CheckedOut, st.Checkout == submodule.CheckoutDiffers),
+			commitLine("Tip", st.Tip, false),
+		)
+	}
 
 	// difference between pin and tip
 	if len(st.Between) > 0 {
-		out = append(out, "", text.Render(m.betweenTitle(st.Pin)))
+		out = append(out, "", text.Render(m.betweenTitle(st.Pin, st.Root)))
 		for _, c := range st.Between {
 			out = append(out,
 				"  "+theme.Fg(t.Primary).Render(c.SHA)+" "+text.Render(c.Subject),
@@ -160,29 +175,50 @@ func (m Model) lines(s *submodule.Submodule) []string {
 
 	// children & meta
 	out = append(out, "")
-	if n := len(s.Children); n > 0 {
+	if root {
+		n := 0
+		submodule.Walk(repo.Submodules, func(*submodule.Submodule) { n++ })
+		summary := fmt.Sprintf("%d", n)
+		if parts := m.hiddenParts(submodule.HiddenIn(repo.Submodules)); parts != "" {
+			summary += muted.Render(" · ") + parts
+		}
+		out = append(out, label("Modules")+summary)
+	} else if n := len(s.Children); n > 0 {
 		children := fmt.Sprintf("%d direct", n)
-		h := s.HiddenIssues()
-		var parts []string
-		if h.Danger > 0 {
-			parts = append(parts, t.LevelStyle(submodule.LevelDanger, lipgloss.NewStyle()).Render(fmt.Sprintf("%d error(s)", h.Danger)))
-		}
-		if h.Warn > 0 {
-			parts = append(parts, t.LevelStyle(submodule.LevelWarn, lipgloss.NewStyle()).Render(fmt.Sprintf("%d warning(s)", h.Warn)))
-		}
-		if h.Staged > 0 {
-			parts = append(parts, theme.Fg(t.Info).Render(fmt.Sprintf("%d %s", h.Staged, theme.Staged)))
-		}
-		if len(parts) > 0 {
-			children += muted.Render(" · ") + strings.Join(parts, muted.Render(", ")) + muted.Render(" below")
+		if parts := m.hiddenParts(s.HiddenIssues()); parts != "" {
+			children += muted.Render(" · ") + parts + muted.Render(" below")
 		}
 		out = append(out, label("Children")+children)
 	}
-	out = append(out, label("URL")+muted.Render(s.URL))
+	if s.URL != "" {
+		out = append(out, label("URL")+muted.Render(s.URL))
+	}
 	return out
 }
 
-func (m Model) betweenTitle(p submodule.PinInfo) string {
+// hiddenParts words issue counts like "1 error(s), 2 warning(s)"; empty if
+// there are none.
+func (m Model) hiddenParts(h submodule.Hidden) string {
+	t := m.theme
+	var parts []string
+	if h.Danger > 0 {
+		parts = append(parts, t.LevelStyle(submodule.LevelDanger, lipgloss.NewStyle()).Render(fmt.Sprintf("%d error(s)", h.Danger)))
+	}
+	if h.Warn > 0 {
+		parts = append(parts, t.LevelStyle(submodule.LevelWarn, lipgloss.NewStyle()).Render(fmt.Sprintf("%d warning(s)", h.Warn)))
+	}
+	if h.Staged > 0 {
+		parts = append(parts, theme.Fg(t.Info).Render(fmt.Sprintf("%d %s", h.Staged, theme.Staged)))
+	}
+	return strings.Join(parts, theme.Fg(t.Muted).Render(", "))
+}
+
+// betweenTitle words the commit list; root says HEAD instead of Pin.
+func (m Model) betweenTitle(p submodule.PinInfo, root bool) string {
+	subject := "Pin"
+	if root {
+		subject = "HEAD"
+	}
 	plural := func(n int) string {
 		if n == 1 {
 			return "commit"
@@ -191,11 +227,11 @@ func (m Model) betweenTitle(p submodule.PinInfo) string {
 	}
 	switch {
 	case p.Ahead > 0 && p.Behind > 0:
-		return fmt.Sprintf("Pin and %s have diverged (%s%d %s%d):",
-			p.Ref, m.theme.Glyphs.Ahead, p.Ahead, m.theme.Glyphs.Behind, p.Behind)
+		return fmt.Sprintf("%s and %s have diverged (%s%d %s%d):",
+			subject, p.Ref, m.theme.Glyphs.Ahead, p.Ahead, m.theme.Glyphs.Behind, p.Behind)
 	case p.Ahead > 0:
-		return fmt.Sprintf("Pin is %d %s ahead of %s:", p.Ahead, plural(p.Ahead), p.Ref)
+		return fmt.Sprintf("%s is %d %s ahead of %s:", subject, p.Ahead, plural(p.Ahead), p.Ref)
 	default:
-		return fmt.Sprintf("Pin is %d %s behind %s:", p.Behind, plural(p.Behind), p.Ref)
+		return fmt.Sprintf("%s is %d %s behind %s:", subject, p.Behind, plural(p.Behind), p.Ref)
 	}
 }

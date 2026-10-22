@@ -85,6 +85,13 @@ func (p *Provider) Tree(ctx context.Context) (*submodule.Repo, error) {
 		}
 	}
 
+	repo.Root = &submodule.Submodule{Name: filepath.Base(p.root), Path: ""}
+	if remote, err := remoteName(ctx, p.root); err != nil {
+		return nil, err
+	} else if remote != "" {
+		repo.Root.URL, _, _ = try(ctx, p.root, "config", "--get", "remote."+remote+".url")
+	}
+
 	mods := map[string]info{}
 	subs, err := p.build(ctx, p.root, nil, mods)
 	if err != nil {
@@ -140,6 +147,9 @@ func (p *Provider) Status(ctx context.Context, path string) (*submodule.Status, 
 		defer func() { <-p.sem }()
 	case <-ctx.Done():
 		return nil, ctx.Err()
+	}
+	if path == "" {
+		return p.rootStatus(ctx)
 	}
 	p.mu.RLock()
 	in, ok := p.mods[path]
@@ -208,17 +218,79 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 		return nil, err
 	}
 
+	if err := pinState(ctx, in, st, pin, head, branch, nil); err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
+// rootStatus describes the superproject. Its "pin" is HEAD, compared with the
+// upstream of the current branch; submodules are ignored, their rows show
+// them.
+func (p *Provider) rootStatus(ctx context.Context) (*submodule.Status, error) {
+	in := info{superDir: p.root, dir: p.root}
+	st := &submodule.Status{Root: true}
+	if gitDir, _, err := gitDirs(in.dir); err == nil {
+		if fi, err := os.Stat(filepath.Join(gitDir, "FETCH_HEAD")); err == nil {
+			st.FetchedAt = fi.ModTime()
+		}
+	}
+
+	head, err := run(ctx, in.dir, "rev-parse", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	branch, onBranch, err := try(ctx, in.dir, "symbolic-ref", "--short", "-q", "HEAD")
+	if err != nil {
+		return nil, err
+	}
+	if !onBranch {
+		st.Checkout = submodule.CheckoutDetached
+	}
+	out, err := run(ctx, in.dir, "status", "--porcelain=v2", "-z", "--untracked-files=normal", "--ignore-submodules=all")
+	if err != nil {
+		return nil, err
+	}
+	entries := parseStatus(out)
+	// a leftover of --ignore-submodules=all in older git versions would
+	// report the submodules the rows already show
+	entries = slices.DeleteFunc(entries, func(e entry) bool { return e.submodule })
+	st.Worktree = worktreeOf(entries)
+	if st.Changes, err = changes(ctx, in.dir, entries); err != nil {
+		return nil, err
+	}
+
+	// the root is compared with its upstream, so that the header and the
+	// detail pane agree; only without one the closest branch is looked for
+	var chosen *candidate
+	if branch != "" {
+		if up, ok, err := try(ctx, in.dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", branch+"@{upstream}"); err != nil {
+			return nil, err
+		} else if ok {
+			chosen = &candidate{up, submodule.RefFromCurrentBranch}
+		}
+	}
+	if err := pinState(ctx, in, st, head, head, branch, chosen); err != nil {
+		return nil, err
+	}
+	return st, nil
+}
+
+// pinState fills the fields of st that describe pin: whether it is pushed, the
+// ref it resolves to (chosen, if not nil), the commits and the distance to the
+// ref. head is the checked-out commit.
+func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, branch string, chosen *candidate) error {
 	// the pin must exist locally to say anything about it
 	if _, ok, err := try(ctx, in.dir, "cat-file", "-e", pin+"^{commit}"); err != nil {
-		return nil, err
+		return err
 	} else if !ok {
-		return nil, fmt.Errorf("pinned commit %.7s not fetched", pin)
+		return fmt.Errorf("pinned commit %.7s not fetched", pin)
 	}
 
 	// remote branches containing the pin, oldest tip first
-	out, err = run(ctx, in.dir, "for-each-ref", "--contains", pin, "--sort=committerdate", "--format=%(refname)", "refs/remotes")
+	out, err := run(ctx, in.dir, "for-each-ref", "--contains", pin, "--sort=committerdate", "--format=%(refname)", "refs/remotes")
 	if err != nil {
-		return nil, err
+		return err
 	}
 	var containing []string
 	for _, r := range strings.Fields(out) {
@@ -228,44 +300,47 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 	}
 	st.Pin.Pushed = len(containing) > 0
 
-	ref, source, err := resolve(ctx, in, pin, branch, containing)
-	if err != nil {
-		return nil, err
+	var ref string
+	var source submodule.RefSource
+	if chosen != nil {
+		ref, source = chosen.ref, chosen.source
+	} else if ref, source, err = resolve(ctx, in, pin, branch, containing); err != nil {
+		return err
 	}
 	st.Pin.Ref, st.Pin.Source = ref, source
 
 	// commits
 	if st.Pinned, err = commit(ctx, in.dir, pin); err != nil {
-		return nil, err
+		return err
 	}
 	st.CheckedOut = st.Pinned
 	if head != pin {
 		if st.CheckedOut, err = commit(ctx, in.dir, head); err != nil {
-			return nil, err
+			return err
 		}
 	}
 	if source == submodule.RefFromSHA {
 		st.Pin.Ref = st.Pinned.SHA
-		return st, nil
+		return nil
 	}
 	if st.Tip, err = commit(ctx, in.dir, ref); err != nil {
-		return nil, err
+		return err
 	}
 	out, err = run(ctx, in.dir, "rev-list", "--left-right", "--count", pin+"..."+ref)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if st.Pin.Ahead, st.Pin.Behind, err = parseLeftRight(out); err != nil {
-		return nil, err
+		return err
 	}
 	if st.Pin.Ahead+st.Pin.Behind > 0 {
 		out, err = run(ctx, in.dir, "log", commitFormat, fmt.Sprintf("--max-count=%d", maxBetween), pin+"..."+ref)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		st.Between = parseCommits(out)
 	}
-	return st, nil
+	return nil
 }
 
 // resolve finds the ref that describes the pin, following the order in

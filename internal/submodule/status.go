@@ -43,7 +43,11 @@ func (s *Status) Issues() []Issue {
 
 	var out []Issue
 	if !s.Pin.Pushed {
-		out = append(out, Issue{IssueUnpushed, LevelDanger, "pin not pushed to any remote"})
+		detail := "pin not pushed to any remote"
+		if s.Root {
+			detail = "HEAD not pushed to any remote"
+		}
+		out = append(out, Issue{IssueUnpushed, LevelDanger, detail})
 	}
 	if s.Worktree == WorktreeConflict {
 		out = append(out, Issue{IssueConflict, LevelDanger, "merge conflict"})
@@ -70,9 +74,13 @@ func (h Hidden) Total() int { return h.Warn + h.Danger }
 // HiddenIssues counts the issues and staged pins of all loaded descendants. A
 // descendant whose load failed counts as one danger, since its state is
 // unknown.
-func (m *Submodule) HiddenIssues() Hidden {
+func (m *Submodule) HiddenIssues() Hidden { return HiddenIn(m.Children) }
+
+// HiddenIn counts the issues and staged pins of mods and all their loaded
+// descendants, like HiddenIssues.
+func HiddenIn(mods []*Submodule) Hidden {
 	var h Hidden
-	Walk(m.Children, func(c *Submodule) {
+	Walk(mods, func(c *Submodule) {
 		if c.Status == nil && c.Err != nil {
 			h.Danger++
 		}

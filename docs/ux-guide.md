@@ -75,6 +75,11 @@ indent ▸ name [n]   status          ref             delta
 
 ### Detail pane
 
+For the superproject (header selected), `Pinned` / `Checkout` become one
+`HEAD` line, the commit list says "HEAD is n commits behind …", and
+`Children` becomes `Modules` (count and issues of all submodules). See
+[Superproject](state-model.md#superproject).
+
 1. Directory (muted) and name (bold)
 2. One line per issue: word (colored, 10 columns) + explanation;
    `in sync  nothing to do` if there are none and no pin is staged;
@@ -136,7 +141,13 @@ Changes   5 files · 2M 1A 1D 1R · +37 −12
 - Untracked directories are shown as one entry (`tmp/`).
 ### Header
 
-`path  branch ↑↓ · n submodules · n error · <count> <issue>… · n pin staged · n loading · <fetch>`
+The header is the superproject's row: it is selected on startup and drawn
+with the selected background (bold) while selected. After the branch it
+shows the superproject's own state word like a tree row (`in sync`,
+`changed`, `unpushed +1`, spinner, `error`). The counts that follow are
+about submodules only.
+
+`path  branch ↑↓ state · n submodules · n error · <count> <issue>… · n pin staged · n loading · <fetch>`
 
 Issue counts are ordered by severity (unpushed, conflict, missing, off pin,
 changed), each in its level color. Zero counts are omitted. `n loading`
@@ -195,13 +206,13 @@ colors in components.
 
 | Key | Behavior |
 |---|---|
-| `↑` / `k`, `↓` / `j` | Previous / next submodule; directory headers are skipped |
+| `↑` / `k`, `↓` / `j` | Previous / next submodule; directory headers are skipped. `↑` from the first submodule selects the header (superproject) |
 | `space` | Toggle expand/collapse of the selected submodule |
-| `→` / `l` | Collapsed with children: expand and select the first child. Expanded: select the first child. Leaf: nothing |
-| `←` / `h` | Expanded: collapse it (stays selected). Otherwise: collapse the parent and select it. Top level: nothing |
+| `→` / `l` | Header selected: first submodule. Collapsed with children: expand and select the first child. Expanded: select the first child. Leaf: nothing |
+| `←` / `h` | Expanded: collapse it (stays selected). Otherwise: collapse the parent and select it. Top level: select the header (superproject) |
 | `L` / `shift+→` / `ctrl+→` | Expand all; then follow the first child from the selection down to a submodule without children |
 | `H` / `shift+←` / `ctrl+←` | Collapse all (resets remembered expansion); select the top-level ancestor |
-| `home` / `g`, `end` / `G` | First / last submodule |
+| `home` / `g`, `end` / `G` | Header (superproject) / last submodule |
 | `pgup`, `pgdn` | Move by one screen |
 | `?` | Toggle full help |
 | `q`, `ctrl+c` | Quit |
@@ -235,6 +246,7 @@ match vanish. If nothing matches the tree says `no submodule matches`.
   `/` edits the term again.
 - **`esc`** closes the input and removes the filter, in both modes. The
   selection stays; its ancestors are expanded so it is still visible.
+- The superproject is never filtered out; if nothing matches it is selected.
 - The filter line shows the keys that apply on its right.
 - The header counts are not filtered.
 
@@ -252,7 +264,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `←` / `h`, `→` / `l` | Fold / unfold, parent / first child | Navigation | Bar, Help | yes |
 | `H` / `⇧←`, `L` / `⇧→` | Collapse / expand all | Navigation | Bar, Help | yes |
 | `space` | Toggle expand/collapse | Navigation | Bar, Help | yes |
-| `home` / `g`, `end` / `G` | First / last submodule | Navigation | Help | yes |
+| `home` / `g`, `end` / `G` | Header / last submodule | Navigation | Help | yes |
 | `pgup`, `pgdn` | Move by one screen | Navigation | Help | yes |
 | `c` | Copy path | Submodule | Palette, Help | yes |
 | `u` | Checkout pin | Submodule | Help | no (flashes "not implemented") |
@@ -266,7 +278,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 
 ### Mouse
 
-- Click a row: select it.
+- Click a row: select it. Click the header: select the superproject.
 - Click `▸` / `▾`: select and toggle.
 - Scroll wheel: move the selection.
 

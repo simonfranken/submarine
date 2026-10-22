@@ -16,6 +16,7 @@ type Repo struct {
 	Ahead      int
 	Behind     int
 	FetchedAt  time.Time
+	Root       *Submodule // the superproject as a selectable node; Path is "", no Children
 	Submodules []*Submodule
 }
 
@@ -31,6 +32,9 @@ type Submodule struct {
 	Err      error   // set if loading the status failed
 	FetchErr error   // set if the last fetch failed; not an issue
 }
+
+// IsRoot reports whether s is the superproject itself.
+func (s *Submodule) IsRoot() bool { return s != nil && s.Path == "" }
 
 // Presence describes whether the submodule exists on disk.
 type Presence int
@@ -171,6 +175,7 @@ func (c *Changes) Sort() {
 
 // Status is the full state of one submodule.
 type Status struct {
+	Root       bool // the superproject: the "pin" is its HEAD
 	Presence   Presence
 	Checkout   Checkout
 	Worktree   Worktree

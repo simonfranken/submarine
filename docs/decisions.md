@@ -258,3 +258,27 @@ one word, D3). It is not counted in `+n`, because `+n` and the header count
 issues and a staged pin stays quiet (D4). A collapsed row shows `●` if a
 staged pin is hidden below it (`Hidden.Staged`), placed before the `·k`
 counts so truncation of the 16-column cell cuts the counts first.
+
+## Superproject is selectable in the header
+
+The state of the root repository was invisible: a submodule the current
+branch no longer has stays on disk as an untracked repository, root files
+can be modified, HEAD can be unpushed. The root becomes a node with an
+empty path (the convention `Fetcher`/`Change` already use), selected on
+startup, and the **header** is its row: it already holds the root's path,
+branch and ahead/behind, and a tree row would cost a line and an indent
+level for an item that is not part of the tree. Selecting the header shows
+the usual detail pane; the header also shows the root's state word, so a
+problem is visible while a submodule is selected.
+
+- *Changes ignore submodules* (`--ignore-submodules=all`): off-pin and staged
+  pins already have their rows; counting them again would make the root
+  `changed` in most real repositories.
+- *Unpushed stays Danger*: same issue kind and level as a submodule, one
+  rule for "work that exists only here" (D4).
+- *The ref is the upstream*, not the closest branch: the header shows
+  ahead/behind of the upstream, and "up to date" means relative to the
+  tracked branch. A nearer feature branch would make the two disagree.
+  Without an upstream the usual resolution applies.
+- The root is not in `Walk`, so counts, fetch and loading logic stay
+  submodule-only; the app tracks it by the path `""`.

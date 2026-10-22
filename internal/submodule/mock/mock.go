@@ -42,8 +42,11 @@ func (p *Provider) Tree(ctx context.Context) (*submodule.Repo, error) {
 	repo := &submodule.Repo{
 		Path:      "~/coding/my_project",
 		Branch:    "main",
+		Behind:    2,
 		FetchedAt: time.Now().Add(-2 * time.Minute),
 	}
+	repo.Root = &submodule.Submodule{Name: "my_project", URL: "git@github.com:acme/my_project.git"}
+	p.statuses[""] = rootStatus()
 	repo.Submodules = p.build(fixture(), nil)
 	return repo, nil
 }
@@ -152,6 +155,31 @@ func changes(age time.Duration, files []submodule.FileChange) *submodule.Changes
 	}
 	c.Sort()
 	return c
+}
+
+// rootStatus is a superproject that is behind its upstream and still has a
+// clone of a submodule the current branch no longer has.
+func rootStatus() *submodule.Status {
+	tip := commit("e4f5a6b", "Move docs into a submodule", "anna", 3*time.Hour)
+	head := commit("0a1b2c3", "Update README", "ben", 2*24*time.Hour)
+	st := &submodule.Status{
+		Root:       true,
+		Worktree:   submodule.WorktreeModified,
+		Pin:        submodule.PinInfo{Ref: "origin/main", Behind: 2, Pushed: true, Source: submodule.RefFromCurrentBranch},
+		Pinned:     head,
+		CheckedOut: head,
+		Tip:        tip,
+		Between: []submodule.Commit{
+			*tip,
+			*commit("9d8c7b6", "Drop the legacy module", "chris", 20*time.Hour),
+		},
+		FetchedAt: now.Add(-2 * time.Minute),
+	}
+	st.Changes = changes(15*time.Minute, []submodule.FileChange{
+		{Path: "README.md", Kind: submodule.ChangeModified, Added: 4, Removed: 1},
+		{Path: "old_module/", Kind: submodule.ChangeUntracked, Repo: true},
+	})
+	return st
 }
 
 func fixture() []node {

@@ -21,9 +21,13 @@ type Fetch struct {
 }
 
 // View renders repo info, state counts and fetch state on one line. spinner
-// is the current spinner frame.
-func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, width int) string {
+// is the current spinner frame. The header stands for the superproject: with
+// selected it is drawn like a selected tree row.
+func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, width int, selected bool) string {
 	bar := lipgloss.NewStyle().Background(t.Bar)
+	if selected {
+		bar = lipgloss.NewStyle().Background(t.Selected).Bold(true)
+	}
 	seg := func(c lipgloss.TerminalColor, s string) string { return bar.Foreground(c).Render(s) }
 
 	if repo == nil {
@@ -33,6 +37,9 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 	left := seg(t.Text, " "+repo.Path) + seg(t.Muted, "  ") + seg(t.Primary, repo.Branch)
 	if d := t.Delta(submodule.PinInfo{Ahead: repo.Ahead, Behind: repo.Behind, Pushed: true}, bar); d != "" {
 		left += seg(t.Text, " ") + d
+	}
+	if repo.Root != nil {
+		left += seg(t.Text, "  ") + t.StatusWord(repo.Root, bar, spinner)
 	}
 
 	// count submodules per issue kind (most severe first), plus staged pins
