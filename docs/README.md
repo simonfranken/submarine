@@ -31,8 +31,7 @@ Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
 
 **Prototype.** The UI is complete for browsing. It reads real repositories
 through a git provider (`internal/submodule/git`): `submarine [dir]`. It
-fetches in the background on startup (`--no-fetch` to skip; `f` to fetch
-again) and follows changes made in other shells. `submarine --mock` shows
+fetches only when asked (`f`) and follows changes made in other shells. `submarine --mock` shows
 the built-in mock data (`internal/submodule/mock`). `!` shows only
 submodules with problems. The actions `u` and `b` only show a "not
 implemented" message ([drafts of the write actions](actions.md)).

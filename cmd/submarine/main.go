@@ -35,9 +35,8 @@ func main() {
 	}
 
 	useMock := flag.Bool("mock", false, "use built-in mock data instead of a real repository")
-	noFetch := flag.Bool("no-fetch", false, "don't fetch remotes in the background on startup")
 	flag.Usage = func() {
-		fmt.Fprintln(flag.CommandLine.Output(), "usage: submarine [--mock] [--no-fetch] [dir]\n       submarine update [--check] [--force]\n       submarine version")
+		fmt.Fprintln(flag.CommandLine.Output(), "usage: submarine [--mock] [dir]\n       submarine update [--check] [--force]\n       submarine version")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -72,9 +71,9 @@ func main() {
 	zone.NewGlobal()
 	defer zone.Close()
 
-	notice := checkForUpdate(ctx, *noFetch || *useMock)
+	notice := checkForUpdate(ctx, *useMock)
 
-	p := tea.NewProgram(tui.New(ctx, provider, tui.Options{Fetch: !*noFetch}), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	p := tea.NewProgram(tui.New(ctx, provider), tea.WithAltScreen(), tea.WithMouseCellMotion())
 	if _, err := p.Run(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -90,7 +89,7 @@ func main() {
 
 // checkForUpdate looks for a newer release in the background (at most once a
 // day, cached) and delivers its version, or "" when there is none. Disabled
-// for dev builds, --no-fetch, --mock and SUBMARINE_NO_UPDATE_CHECK.
+// for dev builds, --mock and SUBMARINE_NO_UPDATE_CHECK.
 func checkForUpdate(ctx context.Context, off bool) <-chan string {
 	out := make(chan string, 1)
 	cache, err := os.UserCacheDir()

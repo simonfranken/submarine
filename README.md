@@ -24,8 +24,9 @@ the questions you actually have:
   (`·1`) and shows `●` if a staged pin is hidden.
 - **Words, not symbols.** Every state is a short word (`unpushed`, `conflict`,
   `missing`, `off pin`, `changed`), so nothing depends on color alone.
-- **Live.** Fetches in the background on startup and follows changes you make
-  in other shells within about two seconds.
+- **Live.** Follows changes you make in other shells within about two
+  seconds. It never fetches on its own: the header shows when you last did,
+  `f` fetches everything.
 - **Built for dozens to hundreds of submodules.** Each status loads
   asynchronously, so the UI never freezes.
 
@@ -44,7 +45,6 @@ Update later with `sub update`.
 ```sh
 sub                  # the repository in the current directory
 sub ~/code/project   # any directory inside a repository
-sub --no-fetch       # skip the background fetch
 sub --mock           # built-in sample data, no repository needed
 ```
 

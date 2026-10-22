@@ -150,7 +150,7 @@ removed + untracked.
 **Consequences.** One extra `git diff` per dirty submodule, none for clean
 ones. Not included: staged/unstaged markers, diff bodies, stash count.
 
-## D18 — Background fetch on startup
+## D18 — Background fetch on startup (superseded by D22)
 
 **Context.** Without fetching, every answer is only as fresh as the user's
 last `git fetch`, which they rarely run in every submodule.
@@ -296,3 +296,20 @@ count as problems because their state is unknown (D7 counts `error` as danger
 too); the cost is that rows vanish as statuses arrive, so the selection is
 refitted after each status. Staged pins are not shown by it, since they are
 not issues.
+
+## D22 — Fetch only on request
+
+**Context.** D18 fetched every repository on startup. With hundreds of
+submodules that is hundreds of network round trips (and credential or
+host-key failures) every time the tool opens, whether or not the user wants
+fresh remote data.
+**Decision.** Supersedes D18. Nothing is fetched on startup. The header and
+the detail pane show the last fetch (`FETCH_HEAD`, also from fetches made in
+other shells), so the user can judge how stale the remote refs are and press
+`f` to fetch. The `--no-fetch` flag is removed with it (it still had the
+side effect of switching off the update check; that has
+`SUBMARINE_NO_UPDATE_CHECK`).
+**Consequences.** Right after startup, `unpushed`, `↓n` and the like are as
+fresh as the last fetch. `fetched never` appears for a repository that was
+never fetched. The progress display and per-submodule fetch errors stay as
+they are, they now belong to `f`.

@@ -29,17 +29,11 @@ const (
 	detailWidthRatio = 0.4
 )
 
-// Options configure the application.
-type Options struct {
-	Fetch bool // fetch all repositories in the background on startup
-}
-
 type Model struct {
 	ctx      context.Context
 	provider submodule.Provider
 	fetcher  submodule.Fetcher // nil if the provider can't fetch
 	watcher  submodule.Watcher // nil if the provider can't watch
-	opts     Options
 	theme    theme.Theme
 	keys     keyMap
 
@@ -66,7 +60,7 @@ type Model struct {
 	showDetail    bool
 }
 
-func New(ctx context.Context, p submodule.Provider, opts Options) Model {
+func New(ctx context.Context, p submodule.Provider) Model {
 	t := theme.Default()
 	k := defaultKeys()
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
@@ -79,7 +73,6 @@ func New(ctx context.Context, p submodule.Provider, opts Options) Model {
 	m := Model{
 		ctx:      ctx,
 		provider: p,
-		opts:     opts,
 		theme:    t,
 		keys:     k,
 		loads:    newReloader(),
@@ -288,9 +281,6 @@ func (m Model) treeLoaded(msg treeLoadedMsg) (tea.Model, tea.Cmd) {
 		if m.watcher != nil {
 			m.changes = m.watcher.Watch(m.ctx)
 			cmds = append(cmds, m.waitForChange())
-		}
-		if m.opts.Fetch {
-			cmds = append(cmds, m.startFetch())
 		}
 	} else {
 		m.tree.ReplaceRoots(m.repo.Submodules)

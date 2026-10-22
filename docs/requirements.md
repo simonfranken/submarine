@@ -100,9 +100,10 @@ commit hashes. It doesn't answer the questions users actually have:
 
 ### Fetch and refresh
 
-- **F50** On startup, after the local state is shown, the superproject and
-  every initialized submodule are fetched in the background (all remotes,
-  with prune). `--no-fetch` turns this off.
+- **F50** Nothing is fetched on startup. The header and the detail pane show
+  when the repositories were last fetched (`FETCH_HEAD`), whoever did it.
+  `f` fetches the superproject and every initialized submodule in the
+  background (all remotes, with prune).
 - **F51** While fetching, the header shows progress (`fetching 12/174`)
   instead of the fetch age; afterwards the age and the number of failed
   fetches. The detail pane shows each submodule's last fetch and, if it
@@ -141,13 +142,12 @@ See [actions.md](actions.md) for the draft of the write actions.
 ```sh
 submarine [dir]     # the repository containing dir (default: current directory)
 submarine --mock    # built-in mock data
-submarine --no-fetch [dir]   # no background fetch on startup
 ```
 
 ## Non-functional requirements
 
 - **N1** Startup must not block on the network. The tool shows the local
-  state at once and fetches in the background (F50).
+  state at once and uses the network only when the user asks (F50).
 - **N2** Loading many submodules must not freeze the UI (async, per
   submodule).
 - **N3** Colors follow the user's terminal theme (ANSI 16 colors); the UI

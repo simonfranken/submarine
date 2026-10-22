@@ -119,9 +119,9 @@ The mock provider (`internal/submodule/mock`) covers every state and sleeps
    calling `Status()` → `statusLoadedMsg`.
 3. Each result is stored on the submodule (`Status` or `Err`); the view
    updates incrementally, including parents' hidden-issue counts.
-4. After the first tree: the watcher starts (`changeMsg`), and the
-   background fetch starts one `tea.Cmd` per fetchable repository
-   (`fetchDoneMsg`).
+4. After the first tree: the watcher starts (`changeMsg`). Nothing is
+   fetched until the user presses `f`, which starts one `tea.Cmd` per
+   fetchable repository (`fetchDoneMsg`).
 5. The spinner ticks only while something loads or fetches.
 
 ### Fetch and refresh are decoupled (D20)
@@ -197,7 +197,7 @@ No CI runner: releases are built and published from a developer machine.
   so `sub` works too). `SUBMARINE_UPDATE_URL` overrides the registry.
 - After the TUI exits, a one-line notice is printed if a newer release
   exists. The check runs in the background at startup, at most once a day
-  (cached in the user cache dir) and is off for dev builds, `--no-fetch`,
+  (cached in the user cache dir) and is off for dev builds,
   `--mock` and `SUBMARINE_NO_UPDATE_CHECK=1`.
 
 ## Testing
