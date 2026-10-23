@@ -54,17 +54,17 @@ func Fg(c lipgloss.TerminalColor) lipgloss.Style {
 
 // Glyphs are the few symbols used next to the state words.
 type Glyphs struct {
-	Staged, Ahead, Behind, Collapsed, Expanded, Problems, Minus, From, Rule, Node, Gap string
+	Staged, Ahead, Behind, Collapsed, Expanded, Problems, Minus, From, Rule, Node, Gap, Join string
 }
 
 func Unicode() Glyphs {
 	return Glyphs{
-		Staged: "●", Ahead: "↑", Behind: "↓", Collapsed: "▸", Expanded: "▾", Problems: "·", Minus: "−", From: "←", Rule: "─", Node: "●", Gap: "┊",
+		Staged: "●", Ahead: "↑", Behind: "↓", Collapsed: "▸", Expanded: "▾", Problems: "·", Minus: "−", From: "←", Rule: "─", Node: "●", Gap: "┊", Join: "╯",
 	}
 }
 
 func ASCII() Glyphs {
 	return Glyphs{
-		Staged: "*", Ahead: "^", Behind: "v", Collapsed: ">", Expanded: "v", Problems: ".", Minus: "-", From: "<-", Rule: "-", Node: "o", Gap: ":",
+		Staged: "*", Ahead: "^", Behind: "v", Collapsed: ">", Expanded: "v", Problems: ".", Minus: "-", From: "<-", Rule: "-", Node: "o", Gap: ":", Join: "/",
 	}
 }

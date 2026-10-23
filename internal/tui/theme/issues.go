@@ -41,6 +41,8 @@ func RoleWord(r submodule.Role) string {
 		return "HEAD"
 	case submodule.RoleStaged:
 		return Staged
+	case submodule.RoleBase:
+		return "base"
 	case submodule.RoleTip:
 		return "tip"
 	default:

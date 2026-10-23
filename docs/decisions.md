@@ -414,3 +414,13 @@ header keeps the progress and `n failed`. `Repo.FetchedAt` is gone.
 **Amendment (with D25).** A staged pin shows both pins on the spine: `staged`
 (the index) and `pin` (the superproject's HEAD, `Status.Committed`), so a
 bump reads as a distance. Before, only the index pin was shown at all.
+
+**Amendment (with D25): forks.** A diverged tip, checkout or committed pin is
+drawn as a second lane that joins the main one at a `base` node (SHA +
+subject of `git merge-base`), instead of a straight line with
+`diverged ↑n ↓m`. The base was chosen over a bare join mark: where the split
+happened is what decides between a merge and a rebase. Cost: one
+`merge-base` and one `log -1` per diverged commit, only when it is diverged.
+Only one fork is drawn; with two diverged commits (rare) the old line with
+the diverged gap remains, since nodes on three lanes would need the
+merge bases between all of them.

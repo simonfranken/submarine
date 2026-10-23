@@ -12,12 +12,17 @@ const (
 	RoleStaged             // the pin in the index, if it differs from RolePin
 	RoleTip                // the tip of the ref the pin was resolved to
 	RoleYou                // the commit checked out in the submodule
+	RoleBase               // where a diverged commit's history splits from the pin's
 )
 
 // SpineNode is one commit on the spine and the roles that sit on it.
 type SpineNode struct {
 	Roles  []Role
 	Commit *Commit
+	// Fork marks the head of a diverged branch. It is the first node; its
+	// Below is the number of commits down to the RoleBase node, on its own
+	// lane, and the other nodes follow on the main lane.
+	Fork bool
 	// Below describes the history between this node and the next one down;
 	// it is the zero Link for the last node.
 	Below Link
@@ -42,19 +47,26 @@ func (l Link) Diverged() bool { return l.Above > 0 && l.Below > 0 }
 
 // spineItem is a commit with its roles on its way to becoming a node.
 type spineItem struct {
-	roles  []Role
-	commit *Commit
-	height int  // commits above (+) or below (−) the pin; unused if div
-	div    bool // diverged from the pin
-	own    int  // commits only this item has
-	pin    int  // commits only the pin has
-	isPin  bool
+	roles    []Role
+	commit   *Commit
+	height   int     // commits above (+) or below (−) the pin; unused if div
+	div      bool    // diverged from the pin
+	divAbove bool    // where a diverged item goes if it is not drawn as a fork
+	base     *Commit // merge base with the pin, if div and known
+	own      int     // commits only this item has
+	pin      int     // commits only the pin has
+	isPin    bool
 }
 
-// Spine arranges the pin (and the staged pin, if any), the tip and the checkout as one line of history,
-// newest on top. Roles on the same commit share a node. A tip or checkout
-// that has diverged from the pin is placed outermost, above or below
-// respectively, with a diverged Link. Missing commits are left out.
+// Spine arranges the pin (and the staged pin, if any), the tip and the
+// checkout as one line of history, newest on top. Roles on the same commit
+// share a node.
+//
+// A commit that has diverged from the pin is drawn as a fork if it is the
+// only one and its merge base is known: it is the first node, and the
+// RoleBase node where the histories split follows on the main lane. Otherwise
+// a diverged tip is placed above the pin and a diverged checkout below it,
+// with a diverged Link. Missing commits are left out.
 func (s *Status) Spine() []SpineNode {
 	if s.Pinned == nil {
 		return nil
@@ -68,13 +80,12 @@ func (s *Status) Spine() []SpineNode {
 	}
 	pin := spineItem{roles: []Role{pinRole}, commit: s.Pinned, isPin: true}
 
-	var above, below []spineItem
-	place := func(role Role, c *Commit, own, pinOnly int, divAbove bool) {
+	var above, below, divs []spineItem
+	place := func(role Role, c, base *Commit, own, pinOnly int, divAbove bool) {
 		it := spineItem{roles: []Role{role}, commit: c, own: own, pin: pinOnly}
 		switch {
 		case own == 0 && pinOnly == 0:
 			pin.roles = append(pin.roles, role)
-			return
 		case own > 0 && pinOnly == 0:
 			it.height = own
 			above = append(above, it)
@@ -82,26 +93,37 @@ func (s *Status) Spine() []SpineNode {
 			it.height = -pinOnly
 			below = append(below, it)
 		default:
-			it.div = true
-			if divAbove {
-				above = append(above, it)
-			} else {
-				below = append(below, it)
-			}
+			it.div, it.divAbove, it.base = true, divAbove, base
+			divs = append(divs, it)
 		}
 	}
 	if s.Tip != nil {
-		place(RoleTip, s.Tip, s.Pin.Behind, s.Pin.Ahead, true)
+		place(RoleTip, s.Tip, s.Bases.Tip, s.Pin.Behind, s.Pin.Ahead, true)
 	}
 	if s.PinStaged && s.Committed != nil {
-		place(RolePin, s.Committed, s.CommittedDrift.Ahead, s.CommittedDrift.Behind, false)
+		place(RolePin, s.Committed, s.Bases.Committed, s.CommittedDrift.Ahead, s.CommittedDrift.Behind, false)
 	}
 	switch {
 	case s.CheckedOut == nil, s.Root: // HEAD is the superproject's pin and checkout
 	case s.CheckedOut.SHA == s.Pinned.SHA:
 		pin.roles = append(pin.roles, RoleYou)
 	default:
-		place(RoleYou, s.CheckedOut, s.Drift.Ahead, s.Drift.Behind, false)
+		place(RoleYou, s.CheckedOut, s.Bases.Checkout, s.Drift.Ahead, s.Drift.Behind, false)
+	}
+
+	var fork *spineItem
+	if len(divs) == 1 && divs[0].base != nil {
+		fork = &divs[0]
+		// the main lane continues to the base, where the fork joins it
+		below = append(below, spineItem{roles: []Role{RoleBase}, commit: fork.base, height: -fork.pin})
+	} else {
+		for _, it := range divs {
+			if it.divAbove {
+				above = append(above, it)
+			} else {
+				below = append(below, it)
+			}
+		}
 	}
 
 	// diverged items are outermost, the rest is ordered by height
@@ -142,6 +164,10 @@ func (s *Status) Spine() []SpineNode {
 		}
 		nodes = append(nodes, SpineNode{Roles: it.roles, Commit: it.commit})
 		last = it
+	}
+	if fork != nil {
+		head := SpineNode{Roles: fork.roles, Commit: fork.commit, Fork: true, Below: Link{Above: fork.own}}
+		nodes = append([]SpineNode{head}, nodes...)
 	}
 	return nodes
 }

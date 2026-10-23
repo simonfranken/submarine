@@ -81,6 +81,48 @@ func TestSpine(t *testing.T) {
 			links: []Link{{Above: 1}, {Above: 2}},
 		},
 		{
+			name: "tip diverged from the pin: a fork",
+			st: Status{Pinned: c("p"), CheckedOut: c("p"), Tip: c("t"), Pin: PinInfo{Ahead: 1, Behind: 2},
+				Bases: Bases{Tip: c("b")}},
+			nodes: []string{"t:tip", "p:pin,you", "b:base"},
+			links: []Link{{Above: 2}, {Above: 1}},
+		},
+		{
+			name: "checkout diverged from the pin: a fork",
+			st: Status{Pinned: c("p"), CheckedOut: c("y"), Tip: c("p"), Drift: Distance{Ahead: 3, Behind: 2},
+				Bases: Bases{Checkout: c("b")}},
+			nodes: []string{"y:you", "p:pin,tip", "b:base"},
+			links: []Link{{Above: 3}, {Above: 2}},
+		},
+		{
+			name: "fork with the tip above the pin on the main lane",
+			st: Status{Pinned: c("p"), CheckedOut: c("y"), Tip: c("t"), Pin: PinInfo{Behind: 2},
+				Drift: Distance{Ahead: 1, Behind: 1}, Bases: Bases{Checkout: c("b")}},
+			nodes: []string{"y:you", "t:tip", "p:pin", "b:base"},
+			links: []Link{{Above: 1}, {Above: 2}, {Above: 1}},
+		},
+		{
+			name: "something older than the base continues below it",
+			st: Status{Pinned: c("p"), CheckedOut: c("y"), Tip: c("t"), Pin: PinInfo{Ahead: 1, Behind: 2},
+				Bases: Bases{Tip: c("b")}, Drift: Distance{Behind: 3}},
+			nodes: []string{"t:tip", "p:pin", "b:base", "y:you"},
+			links: []Link{{Above: 2}, {Above: 1}, {Above: 2}},
+		},
+		{
+			name: "the base is also the checkout",
+			st: Status{Pinned: c("p"), CheckedOut: c("b"), Tip: c("t"), Pin: PinInfo{Ahead: 1, Behind: 2},
+				Bases: Bases{Tip: c("b")}, Drift: Distance{Behind: 1}},
+			nodes: []string{"t:tip", "p:pin", "b:you,base"},
+			links: []Link{{Above: 2}, {Above: 1}},
+		},
+		{
+			name: "two diverged commits are not drawn as a fork",
+			st: Status{Pinned: c("p"), CheckedOut: c("y"), Tip: c("t"), Pin: PinInfo{Ahead: 1, Behind: 2},
+				Drift: Distance{Ahead: 1, Behind: 1}, Bases: Bases{Tip: c("b"), Checkout: c("b")}},
+			nodes: []string{"t:tip", "p:pin", "y:you"},
+			links: []Link{{Above: 2, Below: 1}, {Above: 1, Below: 1}},
+		},
+		{
 			name:  "no tip, checkout not loaded",
 			st:    Status{Pinned: c("p")},
 			nodes: []string{"p:pin"},
@@ -92,7 +134,7 @@ func TestSpine(t *testing.T) {
 			links: []Link{{Above: 2}},
 		},
 	}
-	words := map[Role]string{RolePin: "pin", RoleStaged: "staged", RoleHead: "head", RoleTip: "tip", RoleYou: "you"}
+	words := map[Role]string{RolePin: "pin", RoleStaged: "staged", RoleHead: "head", RoleTip: "tip", RoleYou: "you", RoleBase: "base"}
 	for _, tt := range tests {
 		var nodes []string
 		var links []Link

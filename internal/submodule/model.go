@@ -176,6 +176,11 @@ func (c *Changes) Sort() {
 // `git rev-list --left-right --count a...b`.
 type Distance struct{ Ahead, Behind int }
 
+// Bases are the merge bases of the pin with the commits that have diverged
+// from it, where the histories split. A field is nil if that commit has not
+// diverged or the base is unknown.
+type Bases struct{ Tip, Checkout, Committed *Commit }
+
 // Status is the full state of one submodule.
 type Status struct {
 	Root       bool // the superproject: the "pin" is its HEAD
@@ -193,6 +198,7 @@ type Status struct {
 	// only added. CommittedDrift compares it with Pinned like Drift.
 	Committed      *Commit
 	CommittedDrift Distance
+	Bases          Bases
 	Changes        *Changes  // nil if the worktree is clean or the details are unknown
 	FetchedAt      time.Time // last fetch of the submodule; zero if never
 }

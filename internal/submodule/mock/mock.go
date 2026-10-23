@@ -278,6 +278,7 @@ func fixture() []node {
 		}},
 		{relPath: "libs/http", status: &submodule.Status{
 			Pin:        submodule.PinInfo{Ref: "origin/develop", Ahead: 1, Behind: 2, Pushed: true, Source: submodule.RefFromContains},
+			Bases:      submodule.Bases{Tip: commit("a9b8c7d", "Release 1.9.0", "frank", 20*24*time.Hour)},
 			Pinned:     httpPin,
 			CheckedOut: httpPin,
 			Tip:        httpTip,

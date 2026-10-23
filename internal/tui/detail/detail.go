@@ -208,6 +208,20 @@ func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool) []string {
 	pinAt := slices.IndexFunc(nodes, func(n submodule.SpineNode) bool { return hasRole(n, submodule.RolePin) })
 	stagedAt := slices.IndexFunc(nodes, func(n submodule.SpineNode) bool { return hasRole(n, submodule.RoleStaged) })
 
+	// a fork has its own lane to the right of the main one; it starts at the
+	// first node and joins the main lane at the base
+	fork, baseAt := len(nodes) > 0 && nodes[0].Fork, -1
+	if fork {
+		baseAt = slices.IndexFunc(nodes, func(n submodule.SpineNode) bool { return hasRole(n, submodule.RoleBase) })
+	}
+	line := muted.Render(t.Glyphs.Gap)
+	lanes := func(main, side string) string {
+		if !fork {
+			return main
+		}
+		return main + " " + side
+	}
+
 	var out []string
 	for i, n := range nodes {
 		label, sha := muted, theme.Fg(t.Primary)
@@ -217,10 +231,30 @@ func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool) []string {
 		if offPin && len(n.Roles) == 1 && n.Roles[0] == submodule.RoleYou {
 			label, sha = theme.Fg(t.Warn), theme.Fg(t.Warn)
 		}
-		out = append(out, label.Width(width).Render(labels[i])+sha.Render(t.Glyphs.Node+" "+n.Commit.SHA)+" "+text.Render(n.Commit.Subject))
+		node := sha.Render(t.Glyphs.Node)
+		var cells string
+		switch {
+		case n.Fork:
+			cells = lanes(" ", node)
+		case i == baseAt:
+			cells = node + muted.Render(t.Glyphs.Rule+t.Glyphs.Join)
+		case fork && i < baseAt:
+			cells = lanes(node, line)
+		default:
+			cells = lanes(node, " ")
+		}
+		out = append(out, label.Width(width).Render(labels[i])+cells+" "+sha.Render(n.Commit.SHA)+" "+text.Render(n.Commit.Subject))
 		if i < len(nodes)-1 {
-			gap := muted.Render(t.Glyphs.Gap + m.linkText(n.Below))
-			if i+1 == stagedAt && pinAt >= 0 && pinAt < stagedAt && n.Below.Linear() {
+			// the main lane starts below the fork's head, the fork's lane ends at the base
+			main, side := " ", " "
+			if !fork || i > 0 {
+				main = line
+			}
+			if fork && i < baseAt {
+				side = line
+			}
+			gap := lanes(main, side) + muted.Render(m.linkText(n.Below))
+			if !fork && i+1 == stagedAt && pinAt >= 0 && pinAt < stagedAt && n.Below.Linear() {
 				gap += theme.Fg(t.Info).Render(" (staged pin moves back)")
 			}
 			out = append(out, strings.Repeat(" ", width)+gap)

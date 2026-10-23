@@ -32,6 +32,7 @@ in several at once.
 | `Pin` | `Ref`, `Source`, `Ahead`, `Behind`, `Pushed` |
 | `Pinned`, `CheckedOut`, `Tip` | Commits (SHA, subject, author, time) |
 | `Drift` | Checkout compared with the pin: `Ahead` = commits only the checkout has, `Behind` = commits only the pin has |
+| `Bases` | `Tip`, `Checkout`, `Committed`: `merge-base <pin> <that commit>` for each commit that is diverged from the pin (ahead and behind); nil otherwise or without a common ancestor |
 | `Committed`, `CommittedDrift` | With a staged pin: the pin in the superproject's HEAD (nil if it is not on disk or the submodule was only added) and how it compares with the staged pin, like `Drift` |
 | `Changes` | Changed files of the worktree (nil if clean), see below |
 | `FetchedAt` | Last fetch of the submodule (`FETCH_HEAD` mtime); zero if never |
@@ -174,6 +175,7 @@ are local; `<pin>` is the index gitlink.
 | `Pin.Ref` | rules above; the remote is `origin`, else the first remote |
 | `Ahead`, `Behind` | `rev-list --left-right --count <pin>...<ref>` |
 | `Drift` | `rev-list --left-right --count <head>...<pin>`, only if the checkout differs from the pin |
+| `Bases` | `merge-base <pin> <ref>` / `<head>` / `<committed>`, only when diverged; then `log -1` of it |
 | `Committed`, `CommittedDrift` | `ls-tree HEAD` gitlink, if it differs from the pin and exists locally; `rev-list --left-right --count <committed>...<pin>` |
 
 Details:
@@ -212,10 +214,20 @@ roles (`pin`, `tip`, `you`; `HEAD` for the superproject). It uses `Pin.Ahead` /
   *behind* below it; the `Link` between two nodes counts the commits
   separating them. The count is the distance, so a tip 4 commits ahead
   of the pin shows `4 commits`, and an adjacent one `1 commit`.
-- A diverged tip is placed above the pin, a diverged checkout below it,
-  with a diverged `Link` (`Above` and `Below` count the commits only the
-  upper or lower node has). The link between a diverged node and a node other
-  than the pin is unknown (zero `Link`).
+- A commit that has **diverged** from the pin (tip, checkout or committed
+  pin) is drawn as a **fork** if it is the only one and its merge base is
+  known (`Status.Bases`): it is the first node (`SpineNode.Fork`), with the
+  number of commits down to the base as its `Below`; the main lane follows
+  (pin and the linear nodes), and a `RoleBase` node where the two histories
+  split. Linear nodes between the pin and the base stay on the main lane
+  above it, older ones continue below it, and one that is the base commit
+  shares its node (`you · base`). The pin-to-base distance is the pin's side
+  of the divergence.
+- Otherwise (two diverged commits, or no merge base) there is no fork: a
+  diverged tip is placed above the pin, a diverged checkout below it, with a
+  diverged `Link` (`Above` and `Below` count the commits only the upper or
+  lower node has). The link between a diverged node and a node other than the
+  pin is unknown (zero `Link`).
 - With a staged pin the node of `Pinned` (the index) is labelled `staged`, and
   the committed pin gets its own `pin` node, placed by `CommittedDrift` like
   the checkout. Both can share nodes with `tip` and `you`.

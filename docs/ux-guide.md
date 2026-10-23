@@ -118,9 +118,23 @@ you       ● 48005ac Merge branch 'feat/ethercat…
   sits below it, and the gap above it says `(staged pin moves back)` (blue).
 - The checkout (`you`) is yellow (label and SHA) when it is on its own node,
   i.e. off pin. Everything else is the default text color, the gap muted.
-- A diverged pair shows `┊ diverged ↑n ↓m` (arrows from the lower node's
-  view, like the tree). A real fork is not drawn yet.
-- The nodes are `●` (`o` with `SUBMARINE_ASCII`), the gap `┊` (`:`).
+- A commit that has **diverged** from the pin gets its own lane to the right
+  of the main one. The two lanes join at a `base` node, the commit where the
+  histories split; the counts say how many commits each side has since:
+
+  ```
+  tip         ● e1f2a3b Drop Go 1.21 support
+              ┊ 2 commits
+  pin · you ● ┊ c4d5e6f Experimental HTTP/3
+            ┊ ┊ 1 commit
+  base      ●─╯ a9b8c7d Release 1.9.0
+  ```
+
+  Only one diverged commit is drawn as a fork, and only if the base is known.
+  Otherwise the nodes stay in a line and the gap says `┊ diverged ↑n ↓m`
+  (arrows from the lower node's view, like the tree).
+- The nodes are `●` (`o` with `SUBMARINE_ASCII`), the gap `┊` (`:`), the
+  join `─╯` (`-/`).
 - A missing submodule has only the pin node (SHA, no subject).
 
 #### Change preview

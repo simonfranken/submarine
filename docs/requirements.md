@@ -64,6 +64,8 @@ commit hashes. It doesn't answer the questions users actually have:
   **tip** and the checkout (**you**) as one line of history, newest on top:
   a node per commit (SHA + subject) with its roles, and the number of
   commits between two nodes. Roles on the same commit share a node. A
+  commit that has diverged from the pin is drawn as a fork that joins at
+  the commit where the histories split (`base`). A
   checkout that differs from the pin is highlighted.
 - **F22** *(dropped)* The commits between pin and tip are not listed; only
   their number is shown (F21).

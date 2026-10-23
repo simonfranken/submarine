@@ -241,7 +241,22 @@ func committedState(ctx context.Context, in info, st *submodule.Status, committe
 		return err
 	}
 	st.Committed = c
+	if st.CommittedDrift.Ahead > 0 && st.CommittedDrift.Behind > 0 {
+		if st.Bases.Committed, err = mergeBase(ctx, in.dir, committed, pin); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// mergeBase returns the commit where the histories of a and b split; nil if
+// they have none in common.
+func mergeBase(ctx context.Context, dir, a, b string) (*submodule.Commit, error) {
+	base, ok, err := try(ctx, dir, "merge-base", a, b)
+	if err != nil || !ok || base == "" {
+		return nil, err
+	}
+	return commit(ctx, dir, base)
 }
 
 // rootStatus describes the superproject. Its "pin" is HEAD, compared with the
@@ -346,6 +361,11 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 		if st.Drift.Ahead, st.Drift.Behind, err = parseLeftRight(out); err != nil {
 			return err
 		}
+		if st.Drift.Ahead > 0 && st.Drift.Behind > 0 {
+			if st.Bases.Checkout, err = mergeBase(ctx, in.dir, pin, head); err != nil {
+				return err
+			}
+		}
 	}
 	if source == submodule.RefFromSHA {
 		st.Pin.Ref = st.Pinned.SHA
@@ -360,6 +380,11 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 	}
 	if st.Pin.Ahead, st.Pin.Behind, err = parseLeftRight(out); err != nil {
 		return err
+	}
+	if st.Pin.Ahead > 0 && st.Pin.Behind > 0 {
+		if st.Bases.Tip, err = mergeBase(ctx, in.dir, pin, ref); err != nil {
+			return err
+		}
 	}
 	return nil
 }

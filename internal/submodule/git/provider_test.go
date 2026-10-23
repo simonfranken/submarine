@@ -294,3 +294,50 @@ func TestCommittedPinAheadOfStaged(t *testing.T) {
 		t.Errorf("spine = %+v, want the committed pin directly above the staged one", spine)
 	}
 }
+
+// A pin and its ref that each have a commit the other lacks, and a checkout
+// that did the same to the pin: both get the merge base.
+func TestBasesOfDivergedCommits(t *testing.T) {
+	p, root := ownFixture(t)
+	ctx := context.Background()
+	super := filepath.Join(root, "super")
+
+	// src/net: the pin is unpushed; upstream moved on
+	pushUpstream(t, root, "net")
+	if err := p.Fetch(ctx, "src/net"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := p.Status(ctx, "src/net")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Pin.Ahead != 1 || st.Pin.Behind != 1 {
+		t.Fatalf("src/net: ↑%d↓%d, want ↑1↓1", st.Pin.Ahead, st.Pin.Behind)
+	}
+	if b := st.Bases.Tip; b == nil || b.SHA == st.Pinned.SHA || b.SHA == st.Tip.SHA {
+		t.Errorf("src/net: Bases.Tip = %+v, want a commit before the pin and the tip", b)
+	}
+	if sp := st.Spine(); len(sp) != 3 || !sp[0].Fork || sp[0].Commit.SHA != st.Tip.SHA {
+		t.Errorf("src/net: spine = %+v, want a fork headed by the tip", sp)
+	}
+
+	// src/core: a commit on top of a checkout that is behind the pin
+	git(t, filepath.Join(super, "src", "core"), "commit", "--allow-empty", "-m", "Local")
+	st, err = p.Status(ctx, "src/core")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Drift != (submodule.Distance{Ahead: 1, Behind: 1}) {
+		t.Fatalf("src/core: drift %+v, want 1/1", st.Drift)
+	}
+	if b := st.Bases.Checkout; b == nil || b.SHA == st.Pinned.SHA || b.SHA == st.CheckedOut.SHA {
+		t.Errorf("src/core: Bases.Checkout = %+v", b)
+	}
+
+	// in sync and linear: no bases
+	if st, err = p.Status(ctx, "src/ui"); err != nil {
+		t.Fatal(err)
+	} else if st.Bases != (submodule.Bases{}) {
+		t.Errorf("src/ui: Bases = %+v, want none", st.Bases)
+	}
+}

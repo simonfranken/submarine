@@ -73,3 +73,28 @@ func TestSpineLinesInSync(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+func TestSpineLinesFork(t *testing.T) {
+	m := New(theme.Default(), nil)
+	c := func(sha, subject string) *submodule.Commit { return &submodule.Commit{SHA: sha, Subject: subject} }
+	st := submodule.Status{
+		Pinned: c("c4d5e6f", "Experimental"), CheckedOut: c("c4d5e6f", "Experimental"), Tip: c("e1f2a3b", "Drop Go 1.21"),
+		Pin:   submodule.PinInfo{Ahead: 1, Behind: 2},
+		Bases: submodule.Bases{Tip: c("a1b2c3d", "Release 1.4")},
+	}
+	var got []string
+	for _, l := range m.spineLines(st.Spine(), false) {
+		got = append(got, ansi.Strip(l))
+	}
+	g := theme.Default().Glyphs
+	want := []string{
+		"tip       " + "  " + g.Node + " e1f2a3b Drop Go 1.21",
+		"          " + "  " + g.Gap + " 2 commits",
+		"pin · you " + g.Node + " " + g.Gap + " c4d5e6f Experimental",
+		"          " + g.Gap + " " + g.Gap + " 1 commit",
+		"base      " + g.Node + g.Rule + g.Join + " a1b2c3d Release 1.4",
+	}
+	if !slices.Equal(got, want) {
+		t.Errorf("got\n%q\nwant\n%q", got, want)
+	}
+}
