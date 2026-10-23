@@ -1,6 +1,8 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import (
+	"github.com/charmbracelet/bubbles/key"
+)
 
 type keyMap struct {
 	Up, Down, Left, Right, Toggle key.Binding
@@ -8,7 +10,7 @@ type keyMap struct {
 	Home, End, PageUp, PageDown   key.Binding
 	Fetch, Reload, Filter, Issues key.Binding
 	Copy, Restore, Switch         key.Binding
-	Help, Quit                    key.Binding
+	Help, Quit, QuitUpdate        key.Binding
 }
 
 func defaultKeys() keyMap {
@@ -33,7 +35,15 @@ func defaultKeys() keyMap {
 		Copy:        key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy path")),
 		Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:        key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
+		QuitUpdate:  key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit and update"), key.WithDisabled()),
 	}
+}
+
+// SetUpdate announces the newer release v: q quits and updates to it, and the
+// plain quit moves to Q (ctrl+c always quits without updating).
+func (k *keyMap) SetUpdate(v string) {
+	k.Quit = key.NewBinding(key.WithKeys("Q", "ctrl+c"), key.WithHelp("Q", "quit"))
+	k.QuitUpdate = key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit and update to "+v))
 }
 
 // Navigation returns the bindings that move the selection or fold the tree.
@@ -51,6 +61,23 @@ func (k keyMap) Submodule() []key.Binding { return []key.Binding{k.Copy, k.Switc
 // Global returns the bindings that don't depend on the selection.
 func (k keyMap) Global() []key.Binding { return []key.Binding{k.Help, k.Quit} }
 
+// fullUpdate is Highlight with a short description, for the full help.
+func (k keyMap) fullUpdate() []key.Binding {
+	if !k.QuitUpdate.Enabled() {
+		return nil
+	}
+	return []key.Binding{key.NewBinding(key.WithKeys("q"), key.WithHelp("q", "quit and update"))}
+}
+
+// Highlight returns the bindings that are shown after Global on a highlighted
+// background: quit and update, if there is an update.
+func (k keyMap) Highlight() []key.Binding {
+	if !k.QuitUpdate.Enabled() {
+		return nil
+	}
+	return []key.Binding{k.QuitUpdate}
+}
+
 func (k keyMap) ShortHelp() []key.Binding {
 	return append(append(k.Navigation(), k.Submodule()...), k.Global()...)
 }
@@ -62,6 +89,6 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Home, k.End, k.PageUp, k.PageDown},
 		{k.Copy, k.Switch, k.Restore},
 		{k.Fetch, k.Reload, k.Filter, k.Issues},
-		{k.Help, k.Quit},
+		append([]key.Binding{k.Help, k.Quit}, k.fullUpdate()...),
 	}
 }

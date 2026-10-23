@@ -221,10 +221,12 @@ No CI runner: releases are built and published from a developer machine.
   `VERSION`, downloads the asset for the running platform, verifies the
   checksum and atomically replaces the real executable (symlinks resolved,
   so `sub` works too). `SUBMARINE_UPDATE_URL` overrides the registry.
-- After the TUI exits, a one-line notice is printed if a newer release
-  exists. The check runs in the background at startup, at most once a day
-  (cached in the user cache dir) and is off for dev builds,
-  `--mock` and `SUBMARINE_NO_UPDATE_CHECK=1`.
+- On every start the TUI looks for a newer release in the background (3 s
+  timeout, no cache, no blocking). `main` passes `tui.WithUpdateCheck` and
+  the TUI gets the result as a message; the footer then offers `q quit and
+  update to vX`. That key quits, and `main` installs the release once the
+  terminal is restored (the same code as `submarine update`). The check is off
+  for dev builds, `--mock` and `SUBMARINE_NO_UPDATE_CHECK=1`.
 
 ## Testing
 

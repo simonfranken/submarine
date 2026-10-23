@@ -6,7 +6,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -71,42 +70,38 @@ func main() {
 	zone.NewGlobal()
 	defer zone.Close()
 
-	notice := checkForUpdate(ctx, *useMock)
+	var opts []tui.Option
+	if !*useMock && update.Release(version) && os.Getenv("SUBMARINE_NO_UPDATE_CHECK") == "" {
+		opts = append(opts, tui.WithUpdateCheck(latestRelease))
+	}
 
-	p := tea.NewProgram(tui.New(ctx, provider), tea.WithAltScreen(), tea.WithMouseCellMotion())
-	if _, err := p.Run(); err != nil {
+	p := tea.NewProgram(tui.New(ctx, provider, opts...), tea.WithAltScreen(), tea.WithMouseCellMotion())
+	final, err := p.Run()
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
-	select {
-	case v := <-notice:
-		if v != "" {
-			fmt.Fprintf(os.Stderr, "submarine %s is available (you have %s), run: submarine update\n", v, version)
+	// The user chose "quit and update": the terminal is restored by now.
+	if m, ok := final.(tui.Model); ok && m.UpdateTo() != "" {
+		fmt.Printf("updating to %s…\n", m.UpdateTo())
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+		defer cancel()
+		if code := install(ctx, update.New(), m.UpdateTo()); code != 0 {
+			os.Exit(code)
 		}
-	default:
 	}
 }
 
-// checkForUpdate looks for a newer release in the background (at most once a
-// day, cached) and delivers its version, or "" when there is none. Disabled
-// for dev builds, --mock and SUBMARINE_NO_UPDATE_CHECK.
-func checkForUpdate(ctx context.Context, off bool) <-chan string {
-	out := make(chan string, 1)
-	cache, err := os.UserCacheDir()
-	if off || err != nil || !update.Release(version) || os.Getenv("SUBMARINE_NO_UPDATE_CHECK") != "" {
-		out <- ""
-		return out
+// latestRelease returns the version of a newer release, or "" if there is
+// none or the registry can't be reached within a few seconds.
+func latestRelease(ctx context.Context) string {
+	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
+	defer cancel()
+	v, err := update.New().Latest(ctx)
+	if err != nil || !update.Newer(version, v) {
+		return ""
 	}
-	go func() {
-		ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
-		defer cancel()
-		v, err := update.New().LatestCached(ctx, filepath.Join(cache, "submarine", "latest-version"))
-		if err != nil || !update.Newer(version, v) {
-			v = ""
-		}
-		out <- v
-	}()
-	return out
+	return v
 }
 
 func runUpdate(args []string) int {
@@ -135,6 +130,11 @@ func runUpdate(args []string) int {
 		fmt.Fprintf(os.Stderr, "submarine: this is a %q build; use --force to replace it with %s\n", version, latest)
 		return 1
 	}
+	return install(ctx, c, latest)
+}
+
+// install replaces the running binary with release latest.
+func install(ctx context.Context, c *update.Client, latest string) int {
 	exe, err := c.Install(ctx, latest)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "submarine: update failed:", err)

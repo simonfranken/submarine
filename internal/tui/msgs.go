@@ -26,3 +26,7 @@ type changeMsg struct {
 	change submodule.Change
 	closed bool // the watcher stopped
 }
+
+// updateMsg carries the result of the startup update check; version is ""
+// if there is no newer release.
+type updateMsg struct{ version string }

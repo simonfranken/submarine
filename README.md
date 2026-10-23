@@ -157,7 +157,7 @@ files.
 | `x` | Restore: make the worktree exactly what git records (asks if work would be lost) |
 | `f` / `r` | Fetch / reload |
 | `?` | Full help |
-| `q` | Quit |
+| `q` | Quit. If a newer release exists, the footer offers `q quit and update to vX` (highlighted) and plain quit moves to `Q` |
 
 The mouse works too: click to select, click `▸` to toggle, wheel to move. In
 the branch popup, click a branch to switch to it, use the wheel to move, and

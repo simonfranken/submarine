@@ -19,13 +19,15 @@ const flashDuration = 2 * time.Second
 type clearFlashMsg struct{ id int }
 
 // Keys provides the key groups. The short bar shows Navigation (and
-// Submodule, if requested) on the left and Global on the right; full help
+// Submodule, if requested) on the left, Global and then Highlight (on a
+// highlighted background) on the right; full help
 // shows FullHelp.
 type Keys interface {
 	help.KeyMap
 	Navigation() []key.Binding
 	Submodule() []key.Binding
 	Global() []key.Binding
+	Highlight() []key.Binding
 }
 
 type Model struct {
@@ -41,6 +43,9 @@ type Model struct {
 func New(t theme.Theme, keys Keys) Model {
 	return Model{theme: t, help: theme.NewHelp(t), keys: keys}
 }
+
+// SetKeys replaces the key groups, e.g. if bindings changed.
+func (m *Model) SetKeys(k Keys) { m.keys = k }
 
 // SetActions shows the submodule bindings in the short bar. Set it if the
 // detail pane doesn't show them.
@@ -85,6 +90,13 @@ func (m Model) shortBar(w int) string {
 	h := m.help
 	h.Width = 0
 	right := h.ShortHelpView(m.keys.Global())
+	if hl := m.keys.Highlight(); len(hl) > 0 {
+		var parts []string
+		for _, b := range hl {
+			parts = append(parts, b.Help().Key+" "+b.Help().Desc)
+		}
+		right += "  " + m.theme.Highlight().Render(" "+strings.Join(parts, "  ")+" ")
+	}
 	left := m.keys.Navigation()
 	if m.actions {
 		left = append(left[:len(left):len(left)], m.keys.Submodule()...)

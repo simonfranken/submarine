@@ -209,20 +209,3 @@ func (l *limitWriter) Write(p []byte) (int, error) {
 	}
 	return l.w.Write(p)
 }
-
-// CheckInterval is how often the passive check may hit the network.
-const CheckInterval = 24 * time.Hour
-
-// LatestCached is Latest with a file cache: within CheckInterval it returns
-// the cached answer without any network access. A failed lookup is cached too,
-// so an unreachable registry is not retried on every start.
-func (c *Client) LatestCached(ctx context.Context, cacheFile string) (string, error) {
-	if fi, err := os.Stat(cacheFile); err == nil && time.Since(fi.ModTime()) < CheckInterval {
-		b, _ := os.ReadFile(cacheFile)
-		return strings.TrimSpace(string(b)), nil
-	}
-	v, err := c.Latest(ctx)
-	_ = os.MkdirAll(filepath.Dir(cacheFile), 0o755)
-	_ = os.WriteFile(cacheFile, []byte(v), 0o644) // v is "" on failure
-	return v, err
-}

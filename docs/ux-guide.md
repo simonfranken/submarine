@@ -42,7 +42,10 @@
 Keys come in three groups (`keyMap.Navigation`, `.Submodule`, `.Global`):
 
 - **Navigation** (move, fold, toggle): left in the footer.
-- **Global** (`?`, `q`): right-aligned in the footer, always kept.
+- **Global** (`?`, `q`): right-aligned in the footer, always kept. If a newer
+  release exists, `q quit and update to vX` follows them as the right-most
+  item, on a highlighted background (`Theme.Highlight`: black on Primary), and
+  plain quit is `Q` (see D27).
 - **Submodule** (act on the selected one, e.g. `c`): a palette on the last
   line of the detail pane. It is left out if the pane is shorter than 12
   lines. Whenever the palette isn't shown (pane hidden or too short), these
@@ -250,6 +253,7 @@ colors in components.
 | Bar | adaptive 254 (light) / 235 (dark) | header background |
 | Selected | adaptive 253 (light) / 237 (dark) | selected row background |
 | Backdrop | adaptive 252 (light) / 238 (dark) | the screen behind a popup |
+| Highlight | ANSI `0` black, bold, on Primary | the `quit and update` hint in the footer |
 
 - Background shades have no ANSI-16 equivalent, so they use `AdaptiveColor`.
   The background is detected once in `main` before Bubble Tea starts.
@@ -283,7 +287,7 @@ colors in components.
 | `home` / `g`, `end` / `G` | Header (superproject) / last submodule |
 | `pgup`, `pgdn` | Move by one screen |
 | `?` | Toggle full help |
-| `q`, `ctrl+c` | Quit |
+| `q`, `ctrl+c` | Quit. With a newer release: `q` quits and updates, `Q` and `ctrl+c` quit |
 | `f` | Fetch all repositories (does nothing while a fetch runs) |
 | `r` | Reload everything (e.g. after editing files) |
 | `c` | Copy the absolute directory of the selected submodule to the clipboard (OSC 52, so it also works over SSH; needs terminal support, in tmux `set -g set-clipboard on`). The footer confirms with `copied <path>`. Without a local provider (mock) the path relative to the superproject is copied |
@@ -413,7 +417,8 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `/` | Filter | Global | Help |
 | `!` | Problems only (toggle) | Global | Help |
 | `?` | Toggle full help | Global | Bar, Help |
-| `q`, `ctrl+c` | Quit | Global | Bar, Help |
+| `q`, `ctrl+c` | Quit (`Q`, `ctrl+c` while an update is offered) | Global | Bar, Help |
+| `q` | Quit and update to the newer release (only if there is one) | Global | Bar (highlighted), Help |
 
 ### Mouse
 

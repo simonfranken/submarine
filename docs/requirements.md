@@ -164,6 +164,12 @@ submarine [dir]     # the repository containing dir (default: current directory)
 submarine --mock    # built-in mock data
 ```
 
+- **F58** On every start the tool looks for a newer release in the
+  background (never blocking, silent on failure; off for dev builds,
+  `--mock` and `SUBMARINE_NO_UPDATE_CHECK=1`). If there is one, the footer
+  shows `q quit and update to vX` right of help and quit, highlighted; `q`
+  then quits and installs the release, and plain quit is `Q`.
+
 ## Non-functional requirements
 
 - **N1** Startup must not block on the network. The tool shows the local

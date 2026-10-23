@@ -200,7 +200,8 @@ package so versions stay clean.
 **Consequences.** Integrity is a sha256 from the same host: it catches
 corrupt or partial downloads, not a compromised registry (no signatures).
 The update check is a deliberate, outside-the-provider network use: only
-on `update` and a once-a-day background check that can be disabled.
+on `update` and a background check at startup that can be disabled (it
+was once a day; see D27).
 
 ## Copy path with `c` via OSC 52
 
@@ -481,3 +482,20 @@ and the name is what people know. Long names are cut at 16 columns, so the
 label column cannot grow without bound. In a label every role word has its
 own style, and `you` is bold in the default color: it was lost between the
 muted words, and it is the one the user looks for.
+
+## D27 — Update check on every start, offered as "quit and update"
+
+**Decision.** The registry is asked on every start, in the background, with
+no cache. A newer release shows up in the footer as `q quit and update to
+vX`, right of help and quit, on a highlighted background (black on cyan).
+While it is shown, `q` quits and updates, and plain quit is `Q`. `ctrl+c`
+always quits without updating. The update runs after the TUI has exited.
+**Rationale.** A once-a-day check with a notice printed after exit was
+easy to miss. The hint is only useful where the user is looking, and the
+key they use to leave is the natural place. Running the install after the
+TUI exits keeps the terminal clean and reuses `submarine update`'s code.
+**Consequences.** Every start makes one small request to the registry (3 s
+timeout, failures are silent), which supersedes the once-a-day rule of D21.
+N1 still holds: the TUI never waits for it. `q` changes meaning while an
+update is available, so muscle memory that exits with `q` now updates; the
+bar says so. Typing `q` in the filter or a popup is unchanged.

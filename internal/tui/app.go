@@ -61,11 +61,28 @@ type Model struct {
 	pickerPath string          // the repository the picker is for
 	notice     string          // an error to show above the footer until the next key
 
+	checkUpdate func(context.Context) string // looks for a newer release, nil if off
+	update      string                       // the newer release found, "" if none
+	updateTo    string                       // the release to quit and update to, "" if not chosen
+
 	width, height int
 	showDetail    bool
 }
 
-func New(ctx context.Context, p submodule.Provider) Model {
+// Option configures New.
+type Option func(*Model)
+
+// WithUpdateCheck looks for a newer release at startup, in the background.
+// check returns its version, or "" if there is none. With one, the footer
+// offers to quit and update.
+func WithUpdateCheck(check func(context.Context) string) Option {
+	return func(m *Model) { m.checkUpdate = check }
+}
+
+// UpdateTo returns the release the user chose to quit and update to, or "".
+func (m Model) UpdateTo() string { return m.updateTo }
+
+func New(ctx context.Context, p submodule.Provider, opts ...Option) Model {
 	t := theme.Default()
 	k := defaultKeys()
 	sp := spinner.New(spinner.WithSpinner(spinner.MiniDot))
@@ -90,12 +107,22 @@ func New(ctx context.Context, p submodule.Provider) Model {
 	}
 	m.fetcher, _ = p.(submodule.Fetcher)
 	m.watcher, _ = p.(submodule.Watcher)
+	for _, o := range opts {
+		o(&m)
+	}
 	return m
 }
 
 func (m Model) Init() tea.Cmd {
 	m.loads.start(treeKey)
-	return tea.Batch(m.loadTree(), m.spinner.Tick)
+	return tea.Batch(m.loadTree(), m.spinner.Tick, m.lookForUpdate())
+}
+
+func (m Model) lookForUpdate() tea.Cmd {
+	if m.checkUpdate == nil {
+		return nil
+	}
+	return func() tea.Msg { return updateMsg{m.checkUpdate(m.ctx)} }
 }
 
 func (m Model) loadTree() tea.Cmd {
@@ -185,6 +212,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.layout()
+		return m, nil
+
+	case updateMsg:
+		if msg.version != "" {
+			m.update = msg.version
+			m.keys.SetUpdate(msg.version)
+			m.footer.SetKeys(m.keys)
+			m.layout()
+		}
 		return m, nil
 
 	case treeLoadedMsg:
@@ -360,6 +396,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case m.filtering && msg.Type == tea.KeyEsc:
 		m.closeFilter()
 	case key.Matches(msg, k.Quit):
+		return m, tea.Quit
+	case key.Matches(msg, k.QuitUpdate):
+		m.updateTo = m.update
 		return m, tea.Quit
 	case key.Matches(msg, k.Help):
 		m.footer.ToggleHelp()
