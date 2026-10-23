@@ -1,10 +1,13 @@
 package submodule
 
+import "fmt"
+
 // Level is how much attention an issue deserves.
 type Level int
 
 const (
 	LevelQuiet  Level = iota // nothing to do
+	LevelInfo                // good to know
 	LevelWarn                // look at it
 	LevelDanger              // act now
 )
@@ -13,11 +16,12 @@ const (
 type IssueKind int
 
 const (
-	IssueMissing  IssueKind = iota // not initialized or directory missing
-	IssueUnpushed                  // pin not reachable from any remote ref
-	IssueConflict                  // merge conflict in the worktree
-	IssueOffPin                    // checkout differs from pin
-	IssueChanged                   // uncommitted changes or untracked files
+	IssueMissing   IssueKind = iota // not initialized or directory missing
+	IssueUnpushed                   // pin not reachable from any remote ref
+	IssueConflict                   // merge conflict in the worktree
+	IssueOffPin                     // checkout differs from pin
+	IssueChanged                    // uncommitted changes or untracked files
+	IssueOffTarget                  // pin pushed, but not on the target branch
 )
 
 // Issue is one problem of a submodule. Detail distinguishes the states that
@@ -61,15 +65,29 @@ func (s *Status) Issues() []Issue {
 	case WorktreeUntracked:
 		out = append(out, Issue{IssueChanged, LevelWarn, s.untrackedText()})
 	}
+	// a pin that is pushed, but not on the target (usually main); an
+	// unpushed pin is not on it either, but has the worse issue
+	if !s.Root && s.Pin.Pushed && s.Pin.Target != "" && s.Pin.Ref != s.Pin.Target {
+		out = append(out, Issue{IssueOffTarget, LevelInfo, s.offTargetText()})
+	}
 	return out
+}
+
+// offTargetText says which branch the pin is not on and where it is instead.
+func (s *Status) offTargetText() string {
+	text := fmt.Sprintf("pin not on %s, on %s", s.Pin.Target, s.Pin.Ref)
+	if n := len(s.Pin.Branches); n > 0 {
+		text += fmt.Sprintf(" +%d", n)
+	}
+	return text
 }
 
 // Hidden counts issues below a submodule per level, plus staged pins (which
 // are not issues).
-type Hidden struct{ Warn, Danger, Staged int }
+type Hidden struct{ Info, Warn, Danger, Staged int }
 
 // Total is the number of issues of all levels; staged pins are not counted.
-func (h Hidden) Total() int { return h.Warn + h.Danger }
+func (h Hidden) Total() int { return h.Info + h.Warn + h.Danger }
 
 // HiddenIssues counts the issues and staged pins of all loaded descendants. A
 // descendant whose load failed counts as one danger, since its state is
@@ -93,6 +111,8 @@ func HiddenIn(mods []*Submodule) Hidden {
 				h.Danger++
 			case LevelWarn:
 				h.Warn++
+			case LevelInfo:
+				h.Info++
 			}
 		}
 	})

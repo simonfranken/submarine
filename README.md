@@ -23,10 +23,11 @@ the questions you actually have:
   issue word). A collapsed parent counts the problems hidden below it
   (`·1`) and shows `●` if a staged pin is hidden.
 - **Words, not symbols.** Every state is a short word (`unpushed`, `conflict`,
-  `missing`, `off pin`, `changed`), so nothing depends on color alone.
+  `missing`, `off pin`, `changed`, `off target`), so nothing depends on color
+  alone.
 - **Live.** Follows changes you make in other shells within about two
-  seconds. It never fetches on its own: the header shows when you last did,
-  `f` fetches everything.
+  seconds. It never fetches on its own: the detail pane shows when a
+  repository was last fetched, `f` fetches everything.
 - **Fix it from the same screen.** Restore a repository to exactly what git
   records (`x`), or switch it to another branch (`b`). Both ask first if work
   would be lost.
@@ -58,7 +59,8 @@ sub --mock           # built-in sample data, no repository needed
 ### Find what needs attention
 
 Problems stand out: `unpushed` in red, `off pin` and `changed` in yellow,
-everything else muted. Select a submodule to see the details on the right:
+`off target` (the pin is not on the branch it should be, usually `main`) in
+blue, everything else muted. Select a submodule to see the details on the right:
 every issue in words, the resolved ref and why, where the pin, the tip and
 your checkout are in the history, and a preview of uncommitted changes.
 

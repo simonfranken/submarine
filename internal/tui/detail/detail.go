@@ -16,7 +16,7 @@ import (
 	"submarine/internal/tui/theme"
 )
 
-const labelWidth = 10
+const labelWidth = 11
 
 type Model struct {
 	theme   theme.Theme
@@ -136,7 +136,7 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	if st.Pin.Ref != "" {
 		out = append(out, label("Ref")+text.Render(st.Pin.Ref)+muted.Render(" · via "+st.Pin.Source.String()), "")
 	}
-	out = append(out, m.spineLines(st.Spine(), st.Checkout == submodule.CheckoutDiffers)...)
+	out = append(out, m.spineLines(st.Spine(), st.Checkout == submodule.CheckoutDiffers, st.Pin.Target)...)
 	if s.FetchErr != nil {
 		out = append(out, theme.Fg(t.Warn).Width(labelWidth).Render("fetch")+text.Render("failed: "+s.FetchErr.Error()))
 	}
@@ -175,6 +175,9 @@ func (m Model) hiddenParts(h submodule.Hidden) string {
 	if h.Warn > 0 {
 		parts = append(parts, t.LevelStyle(submodule.LevelWarn, lipgloss.NewStyle()).Render(fmt.Sprintf("%d warning(s)", h.Warn)))
 	}
+	if h.Info > 0 {
+		parts = append(parts, t.LevelStyle(submodule.LevelInfo, lipgloss.NewStyle()).Render(fmt.Sprintf("%d note(s)", h.Info)))
+	}
 	if h.Staged > 0 {
 		parts = append(parts, theme.Fg(t.Info).Render(fmt.Sprintf("%d %s", h.Staged, theme.Staged)))
 	}
@@ -185,22 +188,37 @@ func (m Model) hiddenParts(h submodule.Hidden) string {
 // newest on top: a node per commit with its roles in the label column, and
 // between two nodes how many commits separate them. offPin colors the
 // checkout's own node.
-func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool) []string {
+func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool, target string) []string {
 	t := m.theme
 	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
 
+	// the roles of a node, each word in its own style: the checkout stands
+	// out from the rest, and a staged pin is blue
 	labels := make([]string, len(nodes))
+	labelWidths := make([]int, len(nodes))
 	width := labelWidth
 	for i, n := range nodes {
-		words := make([]string, len(n.Roles))
-		for j, r := range n.Roles {
-			words[j] = theme.RoleWord(r)
+		var plain, styled []string
+		for _, r := range n.Roles {
+			word := theme.RoleWord(r, target)
+			style := muted
+			switch {
+			case r == submodule.RoleStaged:
+				style = theme.Fg(t.Info)
+			case r == submodule.RoleYou && offPin && len(n.Roles) == 1:
+				style = theme.Fg(t.Warn)
+			case r == submodule.RoleYou:
+				style = text.Bold(true)
+			}
+			plain = append(plain, word)
+			styled = append(styled, style.Render(word))
 		}
-		labels[i] = strings.Join(words, " · ")
+		labels[i] = strings.Join(styled, muted.Render(" · "))
+		labelWidths[i] = ansi.StringWidth(strings.Join(plain, " · "))
 		if n.InSync() {
-			labels[i] = theme.InSync
+			labels[i], labelWidths[i] = muted.Render(theme.InSync), len(theme.InSync)
 		}
-		width = max(width, ansi.StringWidth(labels[i])+1)
+		width = max(width, labelWidths[i]+1)
 	}
 
 	// a staged pin below the committed one moves the pin back
@@ -224,12 +242,9 @@ func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool) []string {
 
 	var out []string
 	for i, n := range nodes {
-		label, sha := muted, theme.Fg(t.Primary)
-		if hasRole(n, submodule.RoleStaged) {
-			label = theme.Fg(t.Info)
-		}
+		sha := theme.Fg(t.Primary)
 		if offPin && len(n.Roles) == 1 && n.Roles[0] == submodule.RoleYou {
-			label, sha = theme.Fg(t.Warn), theme.Fg(t.Warn)
+			sha = theme.Fg(t.Warn)
 		}
 		node := sha.Render(t.Glyphs.Node)
 		var cells string
@@ -243,7 +258,7 @@ func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool) []string {
 		default:
 			cells = lanes(node, " ")
 		}
-		out = append(out, label.Width(width).Render(labels[i])+cells+" "+sha.Render(n.Commit.SHA)+" "+text.Render(n.Commit.Subject))
+		out = append(out, labels[i]+strings.Repeat(" ", width-labelWidths[i])+cells+" "+sha.Render(n.Commit.SHA)+" "+text.Render(n.Commit.Subject))
 		if i < len(nodes)-1 {
 			// the main lane starts below the fork's head, the fork's lane ends at the base
 			main, side := " ", " "

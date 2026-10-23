@@ -29,10 +29,33 @@ func TestIssues(t *testing.T) {
 		{"untracked is changed", &Status{Worktree: WorktreeUntracked, Pin: pushed}, []IssueKind{IssueChanged}},
 		{"danger first", &Status{Checkout: CheckoutDiffers, Worktree: WorktreeModified}, []IssueKind{IssueUnpushed, IssueOffPin, IssueChanged}},
 		{"conflict", &Status{Worktree: WorktreeConflict, Pin: pushed}, []IssueKind{IssueConflict}},
+		{"pushed, but not on the target", &Status{Pin: PinInfo{Pushed: true, Ref: "origin/feat", Target: "origin/main", Source: RefFromContains}}, []IssueKind{IssueOffTarget}},
+		{"off target comes last", &Status{Checkout: CheckoutDiffers, Pin: PinInfo{Pushed: true, Ref: "origin/feat", Target: "origin/main"}}, []IssueKind{IssueOffPin, IssueOffTarget}},
+		{"unpushed is not also off target", &Status{Pin: PinInfo{Ref: "origin/main", Target: "origin/main", Ahead: 1}}, []IssueKind{IssueUnpushed}},
+		{"on the target, ahead of nothing else", &Status{Pin: PinInfo{Pushed: true, Ref: "origin/main", Target: "origin/main", Behind: 4}}, nil},
+		{"no target, no judgement", &Status{Pin: PinInfo{Pushed: true, Ref: "origin/feat", Source: RefFromContains}}, nil},
+		{"the superproject has no target", &Status{Root: true, Pin: PinInfo{Pushed: true, Ref: "origin/feat", Target: "origin/main"}}, nil},
 	}
 	for _, tt := range tests {
 		if got := kinds(tt.s.Issues()); !slices.Equal(got, tt.want) {
 			t.Errorf("%s: Issues() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestOffTargetText(t *testing.T) {
+	s := &Status{Pin: PinInfo{Target: "origin/marco-dev", Ref: "origin/fix/x"}}
+	for _, c := range []struct {
+		branches []string
+		want     string
+	}{
+		{nil, "pin not on origin/marco-dev, on origin/fix/x"},
+		{[]string{"origin/main"}, "pin not on origin/marco-dev, on origin/fix/x +1"},
+		{[]string{"origin/main", "origin/y"}, "pin not on origin/marco-dev, on origin/fix/x +2"},
+	} {
+		s.Pin.Branches = c.branches
+		if got := s.offTargetText(); got != c.want {
+			t.Errorf("%v: %q, want %q", c.branches, got, c.want)
 		}
 	}
 }

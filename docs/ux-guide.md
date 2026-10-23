@@ -82,7 +82,7 @@ For the superproject (header selected), the `pin` and `you` roles become
 1. Directory (muted) and name (bold); `fetched <age>` of the submodule,
    muted, right-aligned in the name's line (left out if the pane is too
    narrow, or the submodule is missing)
-2. One line per issue: word (colored, 10 columns) + explanation;
+2. One line per issue: word (colored, 11 columns) + explanation;
    `in sync  nothing to do` if there are none and no pin is staged;
    `staged` and `detached HEAD on pin` as information
 3. `Changes` (only with uncommitted changes), see
@@ -107,7 +107,8 @@ you       ● 48005ac Merge branch 'feat/ethercat…
   position, not by comparing SHAs. The commits between two nodes are not
   listed, only counted (`┊ 4 commits`; `1 commit` if adjacent).
 - The label column holds the roles (`pin`, `tip`, `you`; `HEAD` for the
-  superproject), joined by ` · ` if they sit on one commit
+  superproject; the target's tip is labelled with the name of its branch, e.g.
+  `marco-dev`, without the remote and cut at 16 columns; `target` if unknown), joined by ` · ` if they sit on one commit
   (`pin · tip`, `pin · you`). If all of them sit on one commit it says
   `in sync` instead, which also keeps the commit column in line with the
   other values; the column only grows for a longer label.
@@ -116,8 +117,25 @@ you       ● 48005ac Merge branch 'feat/ethercat…
   visible as a distance between two nodes. The committed pin is left out if
   it is not on disk. If the staged pin is *older* than the committed one it
   sits below it, and the gap above it says `(staged pin moves back)` (blue).
-- The checkout (`you`) is yellow (label and SHA) when it is on its own node,
-  i.e. off pin. Everything else is the default text color, the gap muted.
+- If the pin is `off target`, the target branch's tip is on the spine,
+  labelled with the name of its branch (`marco-dev`, without the remote, cut
+  at 16 columns), so the distance from main is visible: below the pin if the pin is
+  on top of the target, a fork if both have commits of their own. `tip` is
+  then the tip of the branch the pin is on (the `Ref`):
+
+  ```
+  marco-dev    ● d0bbbd7 updated submodules
+               ┊ 12 commits
+  tip        ● ┊ a523224 Remove stale entry
+             ┊ ┊ 1 commit
+  pin · you  ● ┊ 5a7df75 Merge branch 'ethercat…
+             ┊ ┊ 52 commits
+  base       ●─╯ 6707725 updated submodule
+  ```
+- The role words are muted, each word on its own: `you` is bold in the
+  default text color, so the checkout stands out in `pin · you`. On its own
+  node, i.e. off pin, it is yellow (word and SHA); `staged` is blue. Commit
+  subjects use the default text color, the gap is muted.
 - A commit that has **diverged** from the pin gets its own lane to the right
   of the main one. The two lanes join at a `base` node, the commit where the
   histories split; the counts say how many commits each side has since:
@@ -198,7 +216,7 @@ branch and state stay at the left. If the line is too narrow it is cut with
 `…` at the right end, so the most important counts stay.
 
 Issue counts are ordered by severity (unpushed, conflict, missing, off pin,
-changed), each in its level color. Zero counts are omitted. `n loading`
+changed, off target), each in its level color. Zero counts are omitted. `n loading`
 counts only submodules whose status is still being loaded; ones whose load
 failed are counted separately as `n error` (red, before the issue counts). A detached
 superproject shows `(detached)` as its branch.
@@ -224,7 +242,7 @@ colors in components.
 |---|---|---|
 | Danger | ANSI `1` red, bold | `unpushed`, `conflict`, `error`, `↑n` of an unpushed pin |
 | Warn | ANSI `3` yellow | `missing`, `off pin`, `changed`, differing checkout SHA |
-| Info | ANSI `4` blue | `staged`, the `●` staged marker |
+| Info | ANSI `4` blue | `staged`, the `●` staged marker, `off target` |
 | Primary | ANSI `6` cyan | branch names, commit hashes, spinner |
 | Muted | ANSI `8` grey | quiet rows, directory headers, arrows, labels |
 | Text | terminal default | normal text |
@@ -248,6 +266,7 @@ colors in components.
 | `missing` | not initialized / directory missing |
 | `off pin` | checkout differs from pin |
 | `changed` | uncommitted changes / untracked files |
+| `off target` | pin not on `<target>`, on `<branch>` (+n more) |
 | `staged` | pin change staged, not committed |
 | `in sync` | nothing to do |
 

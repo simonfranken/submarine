@@ -483,7 +483,7 @@ func (m Model) nodeLine(r row, nameColW, refW int) string {
 		for _, c := range []struct {
 			level submodule.Level
 			n     int
-		}{{submodule.LevelDanger, h.Danger}, {submodule.LevelWarn, h.Warn}} {
+		}{{submodule.LevelDanger, h.Danger}, {submodule.LevelWarn, h.Warn}, {submodule.LevelInfo, h.Info}} {
 			if c.n == 0 {
 				continue
 			}

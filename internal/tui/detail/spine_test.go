@@ -1,7 +1,9 @@
 package detail
 
 import (
+	"fmt"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/x/ansi"
@@ -20,16 +22,16 @@ func TestSpineLines(t *testing.T) {
 		Drift:      submodule.Distance{Behind: 1},
 	}
 	var got []string
-	for _, l := range m.spineLines(st.Spine(), true) {
+	for _, l := range m.spineLines(st.Spine(), true, "") {
 		got = append(got, ansi.Strip(l))
 	}
 	g := theme.Default().Glyphs
 	want := []string{
-		"tip       " + g.Node + " 3f1bf20 Fix deps",
-		"          " + g.Gap + " 4 commits",
-		"pin       " + g.Node + " 9ac01de Add node",
-		"          " + g.Gap + " 1 commit",
-		"you       " + g.Node + " 48005ac Merge branch",
+		lab("tip") + g.Node + " 3f1bf20 Fix deps",
+		gap + g.Gap + " 4 commits",
+		lab("pin") + g.Node + " 9ac01de Add node",
+		gap + g.Gap + " 1 commit",
+		lab("you") + g.Node + " 48005ac Merge branch",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got\n%q\nwant\n%q", got, want)
@@ -46,7 +48,7 @@ func TestSpineLinesStagedMovesBack(t *testing.T) {
 		CommittedDrift: submodule.Distance{Ahead: 15},
 	}
 	var got []string
-	for _, l := range m.spineLines(st.Spine(), false) {
+	for _, l := range m.spineLines(st.Spine(), false, "") {
 		got = append(got, ansi.Strip(l))
 	}
 	g := theme.Default().Glyphs
@@ -64,11 +66,11 @@ func TestSpineLinesInSync(t *testing.T) {
 	m := New(theme.Default(), nil)
 	c := &submodule.Commit{SHA: "3f1bf20", Subject: "Fix deps"}
 	st := submodule.Status{Pinned: c, CheckedOut: c, Tip: c}
-	lines := m.spineLines(st.Spine(), false)
+	lines := m.spineLines(st.Spine(), false, "")
 	if len(lines) != 1 {
 		t.Fatalf("got %d lines, want 1", len(lines))
 	}
-	want := "in sync   " + theme.Default().Glyphs.Node + " 3f1bf20 Fix deps"
+	want := lab("in sync") + theme.Default().Glyphs.Node + " 3f1bf20 Fix deps"
 	if got := ansi.Strip(lines[0]); got != want {
 		t.Errorf("got %q, want %q", got, want)
 	}
@@ -83,18 +85,43 @@ func TestSpineLinesFork(t *testing.T) {
 		Bases: submodule.Bases{Tip: c("a1b2c3d", "Release 1.4")},
 	}
 	var got []string
-	for _, l := range m.spineLines(st.Spine(), false) {
+	for _, l := range m.spineLines(st.Spine(), false, "") {
 		got = append(got, ansi.Strip(l))
 	}
 	g := theme.Default().Glyphs
 	want := []string{
-		"tip       " + "  " + g.Node + " e1f2a3b Drop Go 1.21",
-		"          " + "  " + g.Gap + " 2 commits",
-		"pin · you " + g.Node + " " + g.Gap + " c4d5e6f Experimental",
-		"          " + g.Gap + " " + g.Gap + " 1 commit",
-		"base      " + g.Node + g.Rule + g.Join + " a1b2c3d Release 1.4",
+		lab("tip") + "  " + g.Node + " e1f2a3b Drop Go 1.21",
+		gap + "  " + g.Gap + " 2 commits",
+		lab("pin · you") + g.Node + " " + g.Gap + " c4d5e6f Experimental",
+		gap + g.Gap + " " + g.Gap + " 1 commit",
+		lab("base") + g.Node + g.Rule + g.Join + " a1b2c3d Release 1.4",
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("got\n%q\nwant\n%q", got, want)
+	}
+}
+
+// lab pads a label like the label column; gap is the empty label column.
+func lab(s string) string { return fmt.Sprintf("%-*s", labelWidth, s) }
+
+var gap = lab("")
+
+func TestSpineLinesTargetName(t *testing.T) {
+	m := New(theme.Default(), nil)
+	c := func(sha string) *submodule.Commit { return &submodule.Commit{SHA: sha, Subject: "s"} }
+	st := submodule.Status{
+		Pinned: c("p"), CheckedOut: c("p"), Tip: c("t"), Pin: submodule.PinInfo{Behind: 1},
+		TargetTip: c("m"), TargetDrift: submodule.Distance{Behind: 3},
+	}
+	for target, want := range map[string]string{
+		"origin/marco-dev":                       "marco-dev",
+		"origin/feature/a-very-long-branch-name": "feature/a-very-…",
+		"":                                       "target",
+	} {
+		lines := m.spineLines(st.Spine(), false, target)
+		last := ansi.Strip(lines[len(lines)-1])
+		if !strings.HasPrefix(last, want) {
+			t.Errorf("target %q: last line %q, want label %q", target, last, want)
+		}
 	}
 }

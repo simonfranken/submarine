@@ -220,7 +220,7 @@ shown in a palette in the detail pane, next to what they act on; global keys
 instead, so small terminals need no extra UI (no overlay or action menu).
 Keys never depend on what is visible.
 
-## Pin resolves to the closest branch
+## Pin resolves to the closest branch (superseded by D26)
 
 A pin on a pushed feature branch showed as diverged from `origin/main`,
 because `branch = main` in `.gitmodules` won before any distance was looked
@@ -424,3 +424,60 @@ happened is what decides between a merge and a rebase. Cost: one
 Only one fork is drawn; with two diverged commits (rare) the old line with
 the diverged gap remains, since nodes on three lanes would need the
 merge bases between all of them.
+
+## D26 — The ref is the target branch; a pin off it is `off target`
+
+**Context.** The main use is checking that a superproject points at the right
+commits of its submodules, ideally the tips of `main`. D1's "closest branch"
+(see "Pin resolves to the closest branch") answered *where the pin is*, not
+*where it should be*: a pin on a feature branch showed that branch, `in sync`
+and quiet, because `unpushed` (D6) is satisfied by any remote branch. The
+closest branch also changed with the branch checked out in the submodule, so
+two machines could show different refs for the same superproject commit.
+**Decision.** Supersedes "Pin resolves to the closest branch". The ref is the
+target: the `branch =` of `.gitmodules` (no fallback to the default branch if
+it does not exist locally), else the remote's default branch (`HEAD`, `main`,
+`master`). Without a target the checked-out branch's upstream, a tag or the
+SHA are shown for orientation, but cannot make a pin off target. A pushed pin
+with commits its target lacks (`Ahead > 0`) is `off target`: a new issue with
+the new level `LevelInfo` (blue), listed last. The other branches that contain
+the pin are named in its text.
+**Alternatives.** Severity by the superproject's branch (strict on `main`,
+quiet elsewhere): rejected, the severity should not depend on the branch.
+Matching the superproject's branch name in submodules: rejected, feature
+branches need not be named alike. Warn level: not now; behind the target is
+quiet and `off target` is information, since a feature branch of the
+superproject legitimately pins feature commits.
+**Consequences.** `RefFromContains` and the 16-branch scan are gone;
+`Pin.Branches` replaces them. `off target` is counted in the header and below
+collapsed rows (blue `·k`) and is part of "problems only". The issue word
+needs 10 columns, so the detail pane's label column is 11 wide.
+
+**Amendment (with D26): target and ref are separate.** Checking a real
+repository, a stale `branch = marco-dev` in `.gitmodules` made every pin
+"↑52↓12 from marco-dev" although the pin was on `main`, one commit behind. The
+target (`PinInfo.Target`) now only decides `off target`; the ref shown is the
+target if the pin is on it, else the branch containing the pin that is closest
+to it, with its real distance. The closest branch is the one with the fewest
+commits after the pin; ties go to the upstream of the branch the submodule is
+on, then alphabetically. The default branch is no favorite: if
+`.gitmodules` targets another branch, `main` is just another branch. The
+tie-break must be fixed, or the same superproject commit would show
+different branches on different machines. The text of the issue names both
+(`pin not on origin/marco-dev, on origin/fix/x +1`), so a stale declaration
+is visible. `RefFromContains` is back; `RefSource.IsTarget` is gone.
+
+**Amendment (with D26): the target on the spine.** An `off target` row only
+said that the pin is elsewhere, not how far from the target. The target's tip
+is now a node (`target`) next to the pin, the tip of the shown ref and the
+checkout, so a feature pin reads as a distance from main. The shown ref
+contains the pin, so only the target can fork from it, and the fork code
+needs no new case. Cost: `log -1`, one `rev-list --left-right --count` and,
+if diverged, one `merge-base` per off-target submodule.
+
+**Amendment (with D26): labels.** The target's tip is labelled with its short
+branch name (`marco-dev`) instead of the word `target`: it is usually short,
+and the name is what people know. Long names are cut at 16 columns, so the
+label column cannot grow without bound. In a label every role word has its
+own style, and `you` is bold in the default color: it was lost between the
+muted words, and it is the one the user looks for.

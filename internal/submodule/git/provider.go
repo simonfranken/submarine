@@ -20,9 +20,13 @@ import (
 	"submarine/internal/submodule"
 )
 
+// maxPinBranches limits Pin.Branches, the other remote branches containing the
+// pin.
+const maxPinBranches = 8
+
 // maxContainsCandidates limits how many remote branches containing the pin
-// are compared besides the preferred refs when resolving a pushed pin.
-const maxContainsCandidates = 16
+// are compared when the pin is not on its target.
+const maxContainsCandidates = 32
 
 // Provider reads a superproject and its submodules with git.
 type Provider struct {
@@ -296,7 +300,7 @@ func (p *Provider) rootStatus(ctx context.Context) (*submodule.Status, error) {
 	}
 
 	// the root is compared with its upstream, so that the header and the
-	// detail pane agree; only without one the closest branch is looked for
+	// detail pane agree; only without one the target is looked for
 	var chosen *candidate
 	if branch != "" {
 		if up, ok, err := try(ctx, in.dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", branch+"@{upstream}"); err != nil {
@@ -340,10 +344,15 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 	var source submodule.RefSource
 	if chosen != nil {
 		ref, source = chosen.ref, chosen.source
-	} else if ref, source, err = resolve(ctx, in, pin, branch, containing); err != nil {
+	} else if ref, source, st.Pin.Target, err = resolve(ctx, in, pin, branch, containing); err != nil {
 		return err
 	}
 	st.Pin.Ref, st.Pin.Source = ref, source
+	for _, b := range containing {
+		if b != ref && len(st.Pin.Branches) < maxPinBranches {
+			st.Pin.Branches = append(st.Pin.Branches, b)
+		}
+	}
 
 	// commits
 	if st.Pinned, err = commit(ctx, in.dir, pin); err != nil {
@@ -386,132 +395,160 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 			return err
 		}
 	}
+
+	// the pin is on another branch than its target: where the target is
+	if target := st.Pin.Target; target != "" && target != ref {
+		if st.TargetTip, err = commit(ctx, in.dir, target); err != nil {
+			return err
+		}
+		out, err = run(ctx, in.dir, "rev-list", "--left-right", "--count", target+"..."+pin)
+		if err != nil {
+			return err
+		}
+		if st.TargetDrift.Ahead, st.TargetDrift.Behind, err = parseLeftRight(out); err != nil {
+			return err
+		}
+		if st.TargetDrift.Ahead > 0 && st.TargetDrift.Behind > 0 {
+			if st.Bases.Target, err = mergeBase(ctx, in.dir, pin, target); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
-// resolve finds the ref that describes the pin, following the order in
-// docs/state-model.md: the closest branch wins, the preferred refs (see
-// preferredRefs) break ties. containing lists the remote branches containing
-// the pin, oldest tip first.
-func resolve(ctx context.Context, in info, pin, branch string, containing []string) (string, submodule.RefSource, error) {
-	preferred, err := preferredRefs(ctx, in, branch)
+// resolve finds the ref the pin is compared with, following the order in
+// docs/state-model.md: the target (see targetRef) if the pin is on it, else the
+// branch containing the pin that is closest to it, else the target anyway,
+// the upstream of the checked-out branch, a tag, the commit itself. It also
+// returns the target ("" if there is none). containing lists the remote
+// branches containing the pin, oldest tip first.
+func resolve(ctx context.Context, in info, pin, branch string, containing []string) (string, submodule.RefSource, string, error) {
+	target, source, hasTarget, err := targetRef(ctx, in)
 	if err != nil {
-		return "", 0, err
+		return "", 0, "", err
 	}
-
-	// 1. pushed: the branch containing the pin with the fewest commits after it
+	if !hasTarget {
+		target = ""
+	}
+	if hasTarget && slices.Contains(containing, target) {
+		return target, source, target, nil
+	}
 	if len(containing) > 0 {
-		var cands []candidate
-		for _, c := range preferred {
-			if _, ok, err := try(ctx, in.dir, "merge-base", "--is-ancestor", pin, c.ref); err != nil {
-				return "", 0, err
-			} else if ok {
-				cands = append(cands, c)
-			}
-		}
-		for _, r := range containing[:min(len(containing), maxContainsCandidates)] {
-			if !slices.ContainsFunc(cands, func(c candidate) bool { return c.ref == r }) {
-				cands = append(cands, candidate{r, submodule.RefFromContains})
-			}
-		}
-		if c, ok, err := closest(ctx, in.dir, pin+"..", cands); err != nil {
-			return "", 0, err
-		} else if ok {
-			return c.ref, c.source, nil
-		}
+		ref, err := closestContaining(ctx, in, pin, branch, containing)
+		return ref, submodule.RefFromContains, target, err
+	}
+	if hasTarget {
+		return target, source, target, nil
 	}
 
-	// 2. unpushed: the preferred ref with the fewest commits on either side
-	if c, ok, err := closest(ctx, in.dir, pin+"...", preferred); err != nil {
-		return "", 0, err
+	// the checked-out branch depends on the machine, so it is no target
+	if up, ok, err := upstream(ctx, in.dir, branch); err != nil {
+		return "", 0, "", err
 	} else if ok {
-		return c.ref, c.source, nil
+		return up, submodule.RefFromCurrentBranch, "", nil
 	}
-
-	// 3. nearest tag
 	if tag, ok, err := try(ctx, in.dir, "describe", "--tags", "--abbrev=0", pin); err != nil {
-		return "", 0, err
+		return "", 0, "", err
 	} else if ok && tag != "" {
-		return tag, submodule.RefFromTag, nil
+		return tag, submodule.RefFromTag, "", nil
 	}
-
-	// 4. the commit itself
-	return "", submodule.RefFromSHA, nil
+	return "", submodule.RefFromSHA, "", nil
 }
 
-// candidate is a ref the pin may resolve to and the rule that proposed it.
+// upstream returns the upstream of the local branch, if there is one.
+func upstream(ctx context.Context, dir, branch string) (string, bool, error) {
+	if branch == "" {
+		return "", false, nil
+	}
+	return try(ctx, dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", branch+"@{upstream}")
+}
+
+// closestContaining picks the branch the pin is closest to among the remote
+// branches containing it: the fewest commits after the pin. A tie goes to the
+// upstream of the checked-out branch, then to the first name in alphabetical
+// order, so that the answer is the same on every machine. No branch,
+// including the default branch, is preferred otherwise.
+func closestContaining(ctx context.Context, in info, pin, branch string, containing []string) (string, error) {
+	var best []string
+	bestN := -1
+	for _, c := range containing[:min(len(containing), maxContainsCandidates)] {
+		out, err := run(ctx, in.dir, "rev-list", "--count", pin+".."+c)
+		if err != nil {
+			return "", err
+		}
+		var n int
+		if _, err := fmt.Sscan(out, &n); err != nil {
+			continue
+		}
+		switch {
+		case bestN < 0 || n < bestN:
+			best, bestN = []string{c}, n
+		case n == bestN:
+			best = append(best, c)
+		}
+	}
+	if len(best) == 0 {
+		return containing[0], nil
+	}
+	if up, ok, err := upstream(ctx, in.dir, branch); err != nil {
+		return "", err
+	} else if ok && slices.Contains(best, up) {
+		return up, nil
+	}
+	slices.Sort(best)
+	return best[0], nil
+}
+
+// targetRef returns the branch the pin should be on: the `branch =` of
+// .gitmodules (`.` is the superproject's current branch), else the remote's
+// default branch, else main or master. A declared branch that does not exist
+// locally is not replaced by the default: the answer would be wrong.
+func targetRef(ctx context.Context, in info) (string, submodule.RefSource, bool, error) {
+	remote, err := remoteName(ctx, in.dir)
+	if err != nil || remote == "" {
+		return "", 0, false, err
+	}
+	exists := func(ref string) (bool, error) {
+		_, ok, err := try(ctx, in.dir, "rev-parse", "--verify", "-q", "refs/remotes/"+ref)
+		return ok, err
+	}
+
+	if b := in.branch; b != "" {
+		if b == "." {
+			if b, _, err = try(ctx, in.superDir, "symbolic-ref", "--short", "-q", "HEAD"); err != nil {
+				return "", 0, false, err
+			}
+		}
+		if b == "" {
+			return "", 0, false, nil
+		}
+		ok, err := exists(remote + "/" + b)
+		if err != nil || !ok {
+			return "", 0, false, err
+		}
+		return remote + "/" + b, submodule.RefFromGitmodules, true, nil
+	}
+
+	if def, ok, err := try(ctx, in.dir, "symbolic-ref", "--short", "-q", "refs/remotes/"+remote+"/HEAD"); err != nil {
+		return "", 0, false, err
+	} else if ok {
+		return def, submodule.RefFromDefaultBranch, true, nil
+	}
+	for _, name := range []string{"main", "master"} {
+		if ok, err := exists(remote + "/" + name); err != nil {
+			return "", 0, false, err
+		} else if ok {
+			return remote + "/" + name, submodule.RefFromDefaultBranch, true, nil
+		}
+	}
+	return "", 0, false, nil
+}
+
+// candidate is a ref and the rule that proposed it.
 type candidate struct {
 	ref    string
 	source submodule.RefSource
-}
-
-// preferredRefs returns the refs the user most likely means, in order of
-// preference and without duplicates: the .gitmodules branch, the upstream of
-// the checked-out branch, the remote default branch. Each must exist.
-func preferredRefs(ctx context.Context, in info, branch string) ([]candidate, error) {
-	remote, err := remoteName(ctx, in.dir)
-	if err != nil {
-		return nil, err
-	}
-	var refs []candidate
-	add := func(ref string, source submodule.RefSource) {
-		if ref != "" && !slices.ContainsFunc(refs, func(c candidate) bool { return c.ref == ref }) {
-			refs = append(refs, candidate{ref, source})
-		}
-	}
-
-	// branch from .gitmodules
-	if b := in.branch; b != "" && remote != "" {
-		if b == "." {
-			b, _, err = try(ctx, in.superDir, "symbolic-ref", "--short", "-q", "HEAD")
-			if err != nil {
-				return nil, err
-			}
-		}
-		if b != "" {
-			if _, ok, err := try(ctx, in.dir, "rev-parse", "--verify", "-q", "refs/remotes/"+remote+"/"+b); err != nil {
-				return nil, err
-			} else if ok {
-				add(remote+"/"+b, submodule.RefFromGitmodules)
-			}
-		}
-	}
-
-	// upstream of the checked-out branch
-	if branch != "" {
-		if up, ok, err := try(ctx, in.dir, "rev-parse", "--abbrev-ref", "--symbolic-full-name", branch+"@{upstream}"); err != nil {
-			return nil, err
-		} else if ok {
-			add(up, submodule.RefFromCurrentBranch)
-		}
-	}
-
-	// remote default branch
-	if remote != "" {
-		if def, ok, err := try(ctx, in.dir, "symbolic-ref", "--short", "-q", "refs/remotes/"+remote+"/HEAD"); err != nil {
-			return nil, err
-		} else if ok {
-			add(def, submodule.RefFromDefaultBranch)
-		}
-	}
-	return refs, nil
-}
-
-// closest returns the candidate with the fewest commits in the range
-// `<from><ref>` (from is e.g. "<pin>.."); the first one wins a tie.
-func closest(ctx context.Context, dir, from string, cands []candidate) (candidate, bool, error) {
-	best, bestN := candidate{}, -1
-	for _, c := range cands {
-		out, err := run(ctx, dir, "rev-list", "--count", from+c.ref)
-		if err != nil {
-			return candidate{}, false, err
-		}
-		var n int
-		if _, err := fmt.Sscan(out, &n); err == nil && (bestN < 0 || n < bestN) {
-			best, bestN = c, n
-		}
-	}
-	return best, bestN >= 0, nil
 }
 
 // remoteName returns "origin" if it exists, else the first remote, else "".

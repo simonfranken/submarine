@@ -2,9 +2,11 @@ package theme
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"submarine/internal/submodule"
 )
@@ -27,13 +29,28 @@ func IssueWord(k submodule.IssueKind) string {
 		return "conflict"
 	case submodule.IssueOffPin:
 		return "off pin"
+	case submodule.IssueOffTarget:
+		return "off target"
 	default:
 		return "changed"
 	}
 }
 
-// RoleWord is the label of a commit's role on the detail pane's spine.
-func RoleWord(r submodule.Role) string {
+// maxTargetWidth limits the branch name that labels the target on the spine.
+const maxTargetWidth = 16
+
+// ShortRef is a remote ref without its remote, e.g. "marco-dev" for
+// "origin/marco-dev", cut to maxTargetWidth with an ellipsis.
+func ShortRef(ref string) string {
+	if _, name, ok := strings.Cut(ref, "/"); ok {
+		ref = name
+	}
+	return ansi.Truncate(ref, maxTargetWidth, "…")
+}
+
+// RoleWord is the label of a commit's role on the detail pane's spine; the
+// target is labelled with the name of its branch.
+func RoleWord(r submodule.Role, target string) string {
 	switch r {
 	case submodule.RolePin:
 		return "pin"
@@ -43,6 +60,11 @@ func RoleWord(r submodule.Role) string {
 		return Staged
 	case submodule.RoleBase:
 		return "base"
+	case submodule.RoleTarget:
+		if target == "" {
+			return "target"
+		}
+		return ShortRef(target)
 	case submodule.RoleTip:
 		return "tip"
 	default:
@@ -118,6 +140,8 @@ func (t Theme) LevelStyle(l submodule.Level, base lipgloss.Style) lipgloss.Style
 		return base.Foreground(t.Danger).Bold(true)
 	case submodule.LevelWarn:
 		return base.Foreground(t.Warn)
+	case submodule.LevelInfo:
+		return base.Foreground(t.Info)
 	default:
 		return base.Foreground(t.Muted)
 	}

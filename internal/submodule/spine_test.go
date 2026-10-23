@@ -123,6 +123,20 @@ func TestSpine(t *testing.T) {
 			links: []Link{{Above: 2, Below: 1}, {Above: 1, Below: 1}},
 		},
 		{
+			name: "pin on a branch ahead of its target: the target is below the pin",
+			st: Status{Pinned: c("p"), CheckedOut: c("p"), Tip: c("t"), Pin: PinInfo{Behind: 1},
+				TargetTip: c("m"), TargetDrift: Distance{Behind: 3}},
+			nodes: []string{"t:tip", "p:pin,you", "m:target"},
+			links: []Link{{Above: 1}, {Above: 3}},
+		},
+		{
+			name: "pin on a branch diverged from its target: a fork",
+			st: Status{Pinned: c("p"), CheckedOut: c("p"), Tip: c("t"), Pin: PinInfo{Behind: 1},
+				TargetTip: c("m"), TargetDrift: Distance{Ahead: 12, Behind: 52}, Bases: Bases{Target: c("b")}},
+			nodes: []string{"m:target", "t:tip", "p:pin,you", "b:base"},
+			links: []Link{{Above: 12}, {Above: 1}, {Above: 52}},
+		},
+		{
 			name:  "no tip, checkout not loaded",
 			st:    Status{Pinned: c("p")},
 			nodes: []string{"p:pin"},
@@ -134,7 +148,7 @@ func TestSpine(t *testing.T) {
 			links: []Link{{Above: 2}},
 		},
 	}
-	words := map[Role]string{RolePin: "pin", RoleStaged: "staged", RoleHead: "head", RoleTip: "tip", RoleYou: "you", RoleBase: "base"}
+	words := map[Role]string{RolePin: "pin", RoleStaged: "staged", RoleHead: "head", RoleTip: "tip", RoleTarget: "target", RoleYou: "you", RoleBase: "base"}
 	for _, tt := range tests {
 		var nodes []string
 		var links []Link

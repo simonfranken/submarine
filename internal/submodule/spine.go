@@ -11,6 +11,7 @@ const (
 	RoleHead               // the superproject's HEAD, which takes the pin's place
 	RoleStaged             // the pin in the index, if it differs from RolePin
 	RoleTip                // the tip of the ref the pin was resolved to
+	RoleTarget             // the tip of the target branch, if the pin is not on it
 	RoleYou                // the commit checked out in the submodule
 	RoleBase               // where a diverged commit's history splits from the pin's
 )
@@ -99,6 +100,9 @@ func (s *Status) Spine() []SpineNode {
 	}
 	if s.Tip != nil {
 		place(RoleTip, s.Tip, s.Bases.Tip, s.Pin.Behind, s.Pin.Ahead, true)
+	}
+	if s.TargetTip != nil {
+		place(RoleTarget, s.TargetTip, s.Bases.Target, s.TargetDrift.Ahead, s.TargetDrift.Behind, true)
 	}
 	if s.PinStaged && s.Committed != nil {
 		place(RolePin, s.Committed, s.Bases.Committed, s.CommittedDrift.Ahead, s.CommittedDrift.Behind, false)

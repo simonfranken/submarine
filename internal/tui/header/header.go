@@ -74,7 +74,7 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 	}
 	for _, k := range []submodule.IssueKind{
 		submodule.IssueUnpushed, submodule.IssueConflict, submodule.IssueMissing,
-		submodule.IssueOffPin, submodule.IssueChanged,
+		submodule.IssueOffPin, submodule.IssueChanged, submodule.IssueOffTarget,
 	} {
 		if n := perKind[k]; n > 0 {
 			parts = append(parts, t.LevelStyle(level[k], bar).Render(fmt.Sprintf("%d %s", n, theme.IssueWord(k))))

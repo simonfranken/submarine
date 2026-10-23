@@ -48,8 +48,14 @@ commit hashes. It doesn't answer the questions users actually have:
   muted `in sync`, or a blue `staged` if their pin change is staged. With
   issues, a staged pin adds a blue `●` after the word.
   See [state-model.md](state-model.md) for the full rules.
-- **F11** Each submodule shows its pin as a ref (`origin/main`, a tag, or a
-  short SHA as a fallback) and the distance to that ref (`↑n`, `↓n`, `↑n↓m`).
+- **F11** Each submodule shows its pin as a ref and the distance to it
+  (`↑n`, `↓n`, `↑n↓m`). The ref is the **target** branch (`branch =` of
+  `.gitmodules`, else the remote's default branch) if the pin is on it, else
+  the branch the pin is on that it is closest to; only without any a tag or
+  a short SHA.
+- **F11a** A pin that is pushed but not on its target branch (for example
+  only on a feature branch) is `off target`, an information (blue) naming
+  the branch it is on. It does not depend on the superproject's branch.
 - **F12** A pin that is not reachable from any remote ref ("unpushed") is
   the most prominent state.
 - **F13** States load asynchronously per submodule; a submodule shows a

@@ -11,12 +11,13 @@ them.
 |---|---|
 | **Pinned** | The gitlink recorded in the superproject index (differs from HEAD → `PinStaged`) |
 | **Checked out** | The submodule's `HEAD` |
-| **Tip** | The tip of the ref the pin was resolved to, e.g. `origin/main` |
+| **Tip** | The tip of the ref the pin was resolved to, normally the target branch, e.g. `origin/main` |
 
 This gives two independent questions:
 
 - **Is the checkout on the pin?** → `off pin` if not.
-- **Where is the pin relative to its ref?** → `↑n` / `↓n` / `↑n↓m`.
+- **Where is the pin relative to its ref?** → `↑n` / `↓n` / `↑n↓m`. A pin
+  that is not on its target branch (but on another) is `off target`.
 
 ## Raw status dimensions
 
@@ -32,7 +33,8 @@ in several at once.
 | `Pin` | `Ref`, `Source`, `Ahead`, `Behind`, `Pushed` |
 | `Pinned`, `CheckedOut`, `Tip` | Commits (SHA, subject, author, time) |
 | `Drift` | Checkout compared with the pin: `Ahead` = commits only the checkout has, `Behind` = commits only the pin has |
-| `Bases` | `Tip`, `Checkout`, `Committed`: `merge-base <pin> <that commit>` for each commit that is diverged from the pin (ahead and behind); nil otherwise or without a common ancestor |
+| `TargetTip`, `TargetDrift` | If the pin is not on its target (`off target`): the target's tip and how it compares with the pin, like `Drift` (`Ahead` = commits only the target has); nil/zero otherwise |
+| `Bases` | `Tip`, `Checkout`, `Committed`, `Target`: `merge-base <pin> <that commit>` for each commit that is diverged from the pin (ahead and behind); nil otherwise or without a common ancestor |
 | `Committed`, `CommittedDrift` | With a staged pin: the pin in the superproject's HEAD (nil if it is not on disk or the submodule was only added) and how it compares with the staged pin, like `Drift` |
 | `Changes` | Changed files of the worktree (nil if clean), see below |
 | `FetchedAt` | Last fetch of the submodule (`FETCH_HEAD` mtime); zero if never |
@@ -75,14 +77,19 @@ truth for what counts as a problem.
 | `missing` | Not initialized; directory missing | Warn |
 | `off pin` | Checkout differs from pin | Warn |
 | `changed` | Uncommitted changes; untracked files (worded "untracked repository" if all of them are git repositories) | Warn |
+| `off target` | Pin is pushed, but not on the target branch (`Pin.Target` is set and differs from `Pin.Ref`, see [Resolving a pin to a ref](#resolving-a-pin-to-a-ref)); the text names the target and the branch the pin is on (`pin not on origin/marco-dev, on origin/main +1`, `+n` for further branches). Not for the superproject | Info |
 
 Rules:
 
 - If the submodule is **missing**, that is its only issue (nothing else can
   be determined).
 - Issues are returned **most severe first**: unpushed, conflict, off pin,
-  changed.
-- **Not issues** (quiet): in sync, pin behind/ahead/diverged but pushed,
+  changed, off target.
+- An unpushed pin is not also `off target`: it has the worse issue.
+- `off target` does not depend on the superproject's branch: a feature
+  branch of the superproject that pins feature-branch commits shows it too.
+  It is information, not a warning (D26).
+- **Not issues** (quiet): in sync, pin behind its target (or another ref),
   staged pin, detached HEAD on the pin. They are shown as information only.
   A staged pin is also visible in the tree (`staged` or a `●` marker), see
   [ux-guide.md](ux-guide.md#tree-row), but is never counted as an issue.
@@ -94,14 +101,15 @@ Rules:
 | Level | Meaning | Presentation |
 |---|---|---|
 | `LevelQuiet` | Nothing to do | Whole row muted, no word |
+| `LevelInfo` | Good to know | Blue word |
 | `LevelWarn` | Look at it | Yellow word |
 | `LevelDanger` | Act now | Red bold word |
 
 ### Hidden issues
 
 `Submodule.HiddenIssues()` counts the issues of **all** loaded descendants
-per level (`Hidden{Warn, Danger}`). A collapsed submodule shows them as `·k`
-per level, red first, then yellow, so a danger can never hide inside a
+per level (`Hidden{Danger, Warn, Info}`). A collapsed submodule shows them as `·k`
+per level, red first, then yellow, then blue, so a danger can never hide inside a
 collapsed subtree and a warning is never mistaken for one.
 A descendant whose load failed (`error`) counts as one danger.
 
@@ -115,8 +123,9 @@ is never `CheckoutDiffers` (`CheckoutDetached` for a detached HEAD),
 "HEAD not pushed to any remote" (Danger, like a submodule's pin).
 
 - **Ref** is the upstream of the current branch (`RefFromCurrentBranch`), so
-  ahead/behind agrees with the header. Closest-branch resolution is only the
-  fallback without an upstream (detached, or no upstream configured).
+  ahead/behind agrees with the header. The target (below) is only the
+  fallback without an upstream (detached, or no upstream configured). The
+  superproject has no `off target` issue.
 - **Changes** ignore submodules (`status --ignore-submodules=all`): an off-pin
   or staged submodule is shown by its own row, not twice. A leftover
   directory of a submodule the branch no longer has is an untracked
@@ -125,38 +134,43 @@ is never `CheckoutDiffers` (`CheckoutDetached` for a detached HEAD),
 
 ## Resolving a pin to a ref
 
-The pin is displayed as a ref, not a hash. A commit can be on several
-branches, on none, or deep in the history. The git provider shows the
-**closest** branch and records which rule proposed it in `PinInfo.Source`.
+Two refs are involved (D26):
 
-Preferred refs, in this order (each only if it exists):
+- The **target** is the branch the pin is supposed to be on, the same for
+  everyone: the `branch =` of `.gitmodules` (`.` is the superproject's
+  current branch), else the remote's default branch (`<remote>/HEAD`, else
+  `<remote>/main`, else `<remote>/master`). A declared branch that does not
+  exist locally gives **no** target (the default branch would be a wrong
+  answer). The remote is `origin`, else the first remote. `PinInfo.Target`.
+- The **ref** is what is displayed, and what `Tip`, `Ahead` and `Behind`
+  refer to. `PinInfo.Ref`, with the rule that found it in `PinInfo.Source`.
 
-| Preference | Ref | `RefSource` |
-|---|---|---|
-| a | `branch = …` in `.gitmodules` | `RefFromGitmodules` |
-| b | Upstream of the branch checked out in the submodule | `RefFromCurrentBranch` |
-| c | Remote default branch (`<remote>/HEAD`) | `RefFromDefaultBranch` |
-
-Resolution:
+Rules for the ref, in order:
 
 | # | Rule | `RefSource` |
 |---|---|---|
-| 1 | Pin pushed: the branch containing the pin with the fewest commits after it. Candidates are the preferred refs that contain the pin plus any remote branch containing it (`for-each-ref --contains`); a tie goes to the preferred ref | preferred ref's, else `RefFromContains` |
-| 2 | Pin unpushed: the preferred ref with the fewest commits on either side (`↑n↓m`), ties by preference | preferred ref's |
-| 3 | A tag (`git describe`) | `RefFromTag` |
-| 4 | Short SHA | `RefFromSHA` |
+| 1 | The pin is on the target (a remote branch containing it): the target | `RefFromGitmodules` / `RefFromDefaultBranch` |
+| 2 | The pin is on other remote branches: the one closest to the pin, fewest commits after it (`rev-list --count <pin>..<branch>`). A tie goes to the upstream of the branch checked out in the submodule, then to the first name in alphabetical order. No branch is a favorite, the default branch included. At most 32 branches are compared (oldest tip first) | `RefFromContains` |
+| 3 | The pin is on no remote branch (unpushed): the target, for the distance | the target's |
+| 4 | There is no target: upstream of the branch checked out in the submodule | `RefFromCurrentBranch` |
+| 5 | A tag (`git describe`) | `RefFromTag` |
+| 6 | Short SHA; no tip, no distance | `RefFromSHA` |
 
-So a `.gitmodules` branch is shown when it is as close as any other branch,
-but a pin that sits on a feature branch shows that branch rather than
-"diverged from main". The trade-off: a pin on main that a younger branch
-also contains shows the younger branch if its tip is fewer commits away.
+Rule 2 is why a pin on a feature branch shows that branch with its real
+distance (`origin/feat/x ↓1`) instead of "diverged from main". `Ref` differs
+from `Target` exactly then, and the issue `off target` says so. It does not
+matter which branch the target is: if `.gitmodules` declares `marco-dev`,
+`main` is just another branch.
+
+`Pin.Branches` lists the other remote branches that contain the pin besides
+`Ref` (oldest tip first, at most 8).
 
 Distances: `git rev-list --left-right --count <pin>...<ref>` gives
-`Ahead` (left) and `Behind` (right).
+`Ahead` (left: commits the pin has that the ref lacks) and `Behind` (right).
 
 `Pushed` is true if the pin is reachable from any remote ref. A pin that is
-ahead of its ref can still be pushed (e.g. on another branch); only
-`Pushed == false` is dangerous.
+not on its target is `off target` if it is pushed (on another branch), and
+`unpushed` if it is not.
 
 ## Git commands
 
@@ -172,21 +186,17 @@ are local; `<pin>` is the index gitlink.
 | `Changes` line counts | `diff HEAD --numstat -z -M --ignore-submodules=dirty`, only if a tracked file changed; failure leaves the counts at 0 |
 | `FileChange.Modified` | `stat` of each changed file that still exists |
 | `Pushed` | `for-each-ref --contains <pin> refs/remotes` is not empty |
-| `Pin.Ref` | rules above; the remote is `origin`, else the first remote |
+| `Pin.Ref`, `Pin.Target`, `Pin.Branches` | rules above; `for-each-ref --contains <pin> refs/remotes` (sorted by commit date), `rev-list --count <pin>..<branch>` per candidate |
 | `Ahead`, `Behind` | `rev-list --left-right --count <pin>...<ref>` |
 | `Drift` | `rev-list --left-right --count <head>...<pin>`, only if the checkout differs from the pin |
-| `Bases` | `merge-base <pin> <ref>` / `<head>` / `<committed>`, only when diverged; then `log -1` of it |
+| `TargetTip`, `TargetDrift` | `log -1` of the target and `rev-list --left-right --count <target>...<pin>`, only if the ref is not the target |
+| `Bases` | `merge-base <pin> <ref>` / `<head>` / `<committed>` / `<target>`, only when diverged; then `log -1` of it |
 | `Committed`, `CommittedDrift` | `ls-tree HEAD` gitlink, if it differs from the pin and exists locally; `rev-list --left-right --count <committed>...<pin>` |
 
 Details:
 
-- Preference a: `branch = .` means the superproject's current branch. The
-  ref counts only if `<remote>/<branch>` exists locally.
-- Preference b uses the checked-out branch's upstream (`<branch>@{upstream}`).
-- Rule 1 counts `rev-list --count <pin>..<ref>`. Besides the preferred refs
-  it compares at most 16 containing branches (oldest tip first).
-- Rule 2 counts `rev-list --count <pin>...<ref>`.
-- Rule 4 shows the short SHA; there is no tip and no distance.
+- Rule 4 uses the checked-out branch's upstream (`<branch>@{upstream}`).
+- Rule 6 shows the short SHA; there is no tip and no distance.
 - `--ignore-submodules=dirty`: changes inside a nested submodule do not make
   its parent `changed` (D7), but a moved nested pin does.
 - Renames are detected only for staged moves (`git mv`); an unstaged move
@@ -204,7 +214,8 @@ Details:
 
 `Status.Spine()` arranges the pin, the tip and the checkout as one line of
 history, newest on top, for the detail pane. Each node is a commit with its
-roles (`pin`, `tip`, `you`; `HEAD` for the superproject). It uses `Pin.Ahead` /
+roles (`pin`, `tip`, `you`; `HEAD` for the superproject; `target` for the
+target branch's tip if the pin is not on it). It uses `Pin.Ahead` /
 `Pin.Behind` (pin ↔ tip) and `Drift` (checkout ↔ pin).
 
 - Roles on the same commit share a node (`pin · tip · you`);
@@ -214,8 +225,8 @@ roles (`pin`, `tip`, `you`; `HEAD` for the superproject). It uses `Pin.Ahead` /
   *behind* below it; the `Link` between two nodes counts the commits
   separating them. The count is the distance, so a tip 4 commits ahead
   of the pin shows `4 commits`, and an adjacent one `1 commit`.
-- A commit that has **diverged** from the pin (tip, checkout or committed
-  pin) is drawn as a **fork** if it is the only one and its merge base is
+- A commit that has **diverged** from the pin (target, tip, checkout or
+  committed pin) is drawn as a **fork** if it is the only one and its merge base is
   known (`Status.Bases`): it is the first node (`SpineNode.Fork`), with the
   number of commits down to the base as its `Below`; the main lane follows
   (pin and the linear nodes), and a `RoleBase` node where the two histories

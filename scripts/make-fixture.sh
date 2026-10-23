@@ -44,7 +44,7 @@ upstream() {
 mkdir -p "$root/remotes" "$root/work"
 for r in core ui net store log feature nested work; do remote "$r"; done
 
-# "feature" has a branch that main doesn't contain
+# "feature" has a branch that main doesn't contain (a pin there is off target)
 g "$root/work/feature" switch -c feat/search
 commit "$root/work/feature" search "Add search"
 commit "$root/work/feature" search "Tune search"
@@ -72,7 +72,7 @@ g "$w" push origin main
 g "$root/work/log" submodule add "$root/remotes/nested.git" modules/nested
 g "$root/work/log" commit -m "Add nested"
 g "$root/work/log" push origin main
-# "archive" ties with main (same tip, sorts first) -> the preferred ref wins
+# "archive" contains the pin of log like main (same tip): another branch with it
 g "$root/work/log" push origin main:archive
 
 super="$root/super"
@@ -113,7 +113,7 @@ g "$super" add libs/feature
 g "$super" commit -m "Pin feature search"
 
 # libs/topic: .gitmodules says main, but the pin is the tip of feat/search
-# -> the closest branch wins over the configured one
+# -> off target: the pin is on a feature branch, not on the configured one
 g "$super/libs/topic" fetch
 g "$super/libs/topic" checkout origin/feat/search
 g "$super" add libs/topic

@@ -67,10 +67,10 @@ const (
 type RefSource int
 
 const (
-	RefFromGitmodules RefSource = iota
-	RefFromCurrentBranch
-	RefFromDefaultBranch
-	RefFromContains
+	RefFromGitmodules    RefSource = iota // the target, `branch =` in .gitmodules; the pin is on it
+	RefFromDefaultBranch                  // the target, the remote's default branch; the pin is on it
+	RefFromContains                       // a branch containing the pin, which is not on the target
+	RefFromCurrentBranch                  // upstream of the checked-out branch, there being no better
 	RefFromTag
 	RefFromSHA
 )
@@ -79,12 +79,12 @@ func (r RefSource) String() string {
 	switch r {
 	case RefFromGitmodules:
 		return ".gitmodules branch"
-	case RefFromCurrentBranch:
-		return "checked out branch"
 	case RefFromDefaultBranch:
 		return "remote default branch"
 	case RefFromContains:
 		return "branch containing pin"
+	case RefFromCurrentBranch:
+		return "checked out branch"
 	case RefFromTag:
 		return "tag"
 	default:
@@ -96,9 +96,17 @@ func (r RefSource) String() string {
 type PinInfo struct {
 	Ref    string // e.g. "origin/main"; empty if unresolved
 	Source RefSource
+	// Target is the branch the pin is supposed to be on (`branch =` of
+	// .gitmodules, else the remote's default branch); empty if there is none or
+	// it does not exist locally. Ref is the target if the pin is on it, else
+	// the branch the pin is on instead.
+	Target string
 	Ahead  int  // commits in pin not in ref
 	Behind int  // commits in ref not in pin
 	Pushed bool // pin is reachable from some remote ref
+	// Branches are remote branches other than Ref that contain the pin, oldest
+	// tip first and limited.
+	Branches []string
 }
 
 // Commit is a short commit description.
@@ -179,7 +187,7 @@ type Distance struct{ Ahead, Behind int }
 // Bases are the merge bases of the pin with the commits that have diverged
 // from it, where the histories split. A field is nil if that commit has not
 // diverged or the base is unknown.
-type Bases struct{ Tip, Checkout, Committed *Commit }
+type Bases struct{ Tip, Checkout, Committed, Target *Commit }
 
 // Status is the full state of one submodule.
 type Status struct {
@@ -198,7 +206,12 @@ type Status struct {
 	// only added. CommittedDrift compares it with Pinned like Drift.
 	Committed      *Commit
 	CommittedDrift Distance
-	Bases          Bases
-	Changes        *Changes  // nil if the worktree is clean or the details are unknown
-	FetchedAt      time.Time // last fetch of the submodule; zero if never
+	// TargetTip is the tip of Pin.Target if the pin is not on it (the ref is
+	// another branch), else nil. TargetDrift compares it with Pinned like
+	// Drift: Ahead = commits only the target has.
+	TargetTip   *Commit
+	TargetDrift Distance
+	Bases       Bases
+	Changes     *Changes  // nil if the worktree is clean or the details are unknown
+	FetchedAt   time.Time // last fetch of the submodule; zero if never
 }

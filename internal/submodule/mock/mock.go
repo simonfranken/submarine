@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math/rand/v2"
 	"path"
+	"strings"
 	"sync"
 	"time"
 
@@ -132,8 +133,12 @@ func commit(sha, subject, author string, ago time.Duration) *submodule.Commit {
 }
 
 func inSync(ref string, c *submodule.Commit) *submodule.Status {
+	pin := submodule.PinInfo{Ref: ref, Pushed: true}
+	if strings.HasPrefix(ref, "origin/") {
+		pin.Target = ref // on its target branch
+	}
 	return &submodule.Status{
-		Pin:    submodule.PinInfo{Ref: ref, Pushed: true},
+		Pin:    pin,
 		Pinned: c, CheckedOut: c, Tip: c,
 	}
 }
@@ -271,13 +276,16 @@ func fixture() []node {
 			Tip:        sub3Tip,
 		}},
 		{relPath: "libs/logging", status: &submodule.Status{
-			Pin:        submodule.PinInfo{Ref: "origin/main", Behind: 3, Pushed: true},
-			Pinned:     logPin,
-			CheckedOut: logPin,
-			Tip:        logTip,
+			Pin:         submodule.PinInfo{Ref: "origin/feat/slog", Source: submodule.RefFromContains, Target: "origin/main", Behind: 3, Pushed: true},
+			Pinned:      logPin,
+			CheckedOut:  logPin,
+			Tip:         logTip,
+			TargetTip:   commit("0f1e2d3", "Bump dependencies", "renovate", 30*time.Hour),
+			TargetDrift: submodule.Distance{Ahead: 2, Behind: 4},
+			Bases:       submodule.Bases{Target: commit("9a8b7c6", "Release 0.8.0", "dana", 14*24*time.Hour)},
 		}},
 		{relPath: "libs/http", status: &submodule.Status{
-			Pin:        submodule.PinInfo{Ref: "origin/develop", Ahead: 1, Behind: 2, Pushed: true, Source: submodule.RefFromContains},
+			Pin:        submodule.PinInfo{Ref: "origin/develop", Target: "origin/develop", Ahead: 1, Behind: 2, Source: submodule.RefFromGitmodules},
 			Bases:      submodule.Bases{Tip: commit("a9b8c7d", "Release 1.9.0", "frank", 20*24*time.Hour)},
 			Pinned:     httpPin,
 			CheckedOut: httpPin,
