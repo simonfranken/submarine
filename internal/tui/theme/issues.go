@@ -32,6 +32,22 @@ func IssueWord(k submodule.IssueKind) string {
 	}
 }
 
+// RoleWord is the label of a commit's role on the detail pane's spine.
+func RoleWord(r submodule.Role) string {
+	switch r {
+	case submodule.RolePin:
+		return "pin"
+	case submodule.RoleHead:
+		return "HEAD"
+	case submodule.RoleStaged:
+		return Staged
+	case submodule.RoleTip:
+		return "tip"
+	default:
+		return "you"
+	}
+}
+
 // StatusWord renders the state of s as one word: a spinner while loading,
 // `error`, the most severe issue with "+n" for further ones, `staged`, or a
 // muted "in sync". base is applied to every segment, e.g. to keep a row

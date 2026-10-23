@@ -154,9 +154,6 @@ func TestRootStatusRefIsUpstream(t *testing.T) {
 	if st.Pin.Ahead != 0 || st.Pin.Behind != 3 {
 		t.Errorf("ahead/behind = %d/%d, want 0/3", st.Pin.Ahead, st.Pin.Behind)
 	}
-	if len(st.Between) != 3 {
-		t.Errorf("Between = %d commits, want 3", len(st.Between))
-	}
 }
 
 func TestRootStatusDetached(t *testing.T) {

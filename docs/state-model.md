@@ -31,7 +31,8 @@ in several at once.
 | `PinStaged` | Pin changed in the superproject index but not committed |
 | `Pin` | `Ref`, `Source`, `Ahead`, `Behind`, `Pushed` |
 | `Pinned`, `CheckedOut`, `Tip` | Commits (SHA, subject, author, time) |
-| `Between` | Commits that make up the pin ↔ tip difference |
+| `Drift` | Checkout compared with the pin: `Ahead` = commits only the checkout has, `Behind` = commits only the pin has |
+| `Committed`, `CommittedDrift` | With a staged pin: the pin in the superproject's HEAD (nil if it is not on disk or the submodule was only added) and how it compares with the staged pin, like `Drift` |
 | `Changes` | Changed files of the worktree (nil if clean), see below |
 | `FetchedAt` | Last fetch of the submodule (`FETCH_HEAD` mtime); zero if never |
 
@@ -172,7 +173,8 @@ are local; `<pin>` is the index gitlink.
 | `Pushed` | `for-each-ref --contains <pin> refs/remotes` is not empty |
 | `Pin.Ref` | rules above; the remote is `origin`, else the first remote |
 | `Ahead`, `Behind` | `rev-list --left-right --count <pin>...<ref>` |
-| `Between` | `log <pin>...<ref>`, at most 50 commits |
+| `Drift` | `rev-list --left-right --count <head>...<pin>`, only if the checkout differs from the pin |
+| `Committed`, `CommittedDrift` | `ls-tree HEAD` gitlink, if it differs from the pin and exists locally; `rev-list --left-right --count <committed>...<pin>` |
 
 Details:
 
@@ -195,6 +197,29 @@ Details:
 - If the pinned commit doesn't exist in the submodule (not fetched), loading
   fails with "pinned commit … not fetched" (shown as `error`) instead of
   guessing `unpushed`.
+
+## Spine
+
+`Status.Spine()` arranges the pin, the tip and the checkout as one line of
+history, newest on top, for the detail pane. Each node is a commit with its
+roles (`pin`, `tip`, `you`; `HEAD` for the superproject). It uses `Pin.Ahead` /
+`Pin.Behind` (pin ↔ tip) and `Drift` (checkout ↔ pin).
+
+- Roles on the same commit share a node (`pin · tip · you`);
+  `SpineNode.InSync()` is true if all of them are on it (`HEAD` and `tip` for
+  the superproject).
+- Tip or checkout *ahead* of the pin (it is their ancestor) sit above it,
+  *behind* below it; the `Link` between two nodes counts the commits
+  separating them. The count is the distance, so a tip 4 commits ahead
+  of the pin shows `4 commits`, and an adjacent one `1 commit`.
+- A diverged tip is placed above the pin, a diverged checkout below it,
+  with a diverged `Link` (`Above` and `Below` count the commits only the
+  upper or lower node has). The link between a diverged node and a node other
+  than the pin is unknown (zero `Link`).
+- With a staged pin the node of `Pinned` (the index) is labelled `staged`, and
+  the committed pin gets its own `pin` node, placed by `CommittedDrift` like
+  the checkout. Both can share nodes with `tip` and `you`.
+- No tip (the pin resolved to a SHA) or no checkout commit: no node.
 
 ## Distance notation
 

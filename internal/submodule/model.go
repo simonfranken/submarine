@@ -15,7 +15,6 @@ type Repo struct {
 	Branch     string
 	Ahead      int
 	Behind     int
-	FetchedAt  time.Time
 	Root       *Submodule // the superproject as a selectable node; Path is "", no Children
 	Submodules []*Submodule
 }
@@ -173,6 +172,10 @@ func (c *Changes) Sort() {
 	})
 }
 
+// Distance counts the commits only one side of a comparison has, like
+// `git rev-list --left-right --count a...b`.
+type Distance struct{ Ahead, Behind int }
+
 // Status is the full state of one submodule.
 type Status struct {
 	Root       bool // the superproject: the "pin" is its HEAD
@@ -184,7 +187,12 @@ type Status struct {
 	Pinned     *Commit
 	CheckedOut *Commit
 	Tip        *Commit
-	Between    []Commit  // commits that make up the pin <-> tip difference
-	Changes    *Changes  // nil if the worktree is clean or the details are unknown
-	FetchedAt  time.Time // last fetch of the submodule; zero if never
+	Drift      Distance // checkout compared with the pin: Ahead = commits only the checkout has
+	// Committed is the pin in the superproject's HEAD while Pinned (the index) is
+	// staged; nil if nothing is staged, the commit is not on disk, or the pin was
+	// only added. CommittedDrift compares it with Pinned like Drift.
+	Committed      *Commit
+	CommittedDrift Distance
+	Changes        *Changes  // nil if the worktree is clean or the details are unknown
+	FetchedAt      time.Time // last fetch of the submodule; zero if never
 }

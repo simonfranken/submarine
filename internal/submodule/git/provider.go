@@ -24,9 +24,6 @@ import (
 // are compared besides the preferred refs when resolving a pushed pin.
 const maxContainsCandidates = 16
 
-// maxBetween limits the commits listed between pin and tip.
-const maxBetween = 50
-
 // Provider reads a superproject and its submodules with git.
 type Provider struct {
 	root     string        // absolute superproject root
@@ -78,13 +75,6 @@ func (p *Provider) Tree(ctx context.Context) (*submodule.Repo, error) {
 		return nil, err
 	} else if ok {
 		repo.Ahead, repo.Behind, _ = parseLeftRight(out)
-	}
-	if dir, ok, err := try(ctx, p.root, "rev-parse", "--path-format=absolute", "--git-common-dir"); err != nil {
-		return nil, err
-	} else if ok {
-		if fi, err := os.Stat(filepath.Join(dir, "FETCH_HEAD")); err == nil {
-			repo.FetchedAt = fi.ModTime()
-		}
 	}
 
 	repo.Root = &submodule.Submodule{Name: filepath.Base(p.root), Path: ""}
@@ -176,7 +166,8 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	st := &submodule.Status{PinStaged: parseGitlink(out) != pin}
+	committed := parseGitlink(out)
+	st := &submodule.Status{PinStaged: committed != pin}
 
 	// presence
 	if _, err := os.Stat(in.dir); errors.Is(err, fs.ErrNotExist) {
@@ -223,7 +214,34 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 	if err := pinState(ctx, in, st, pin, head, branch, nil); err != nil {
 		return nil, err
 	}
+	if st.PinStaged && committed != "" {
+		if err := committedState(ctx, in, st, committed, pin); err != nil {
+			return nil, err
+		}
+	}
 	return st, nil
+}
+
+// committedState fills the pin of the superproject's HEAD and how it compares
+// with the staged pin. It stays empty if the commit is not on disk: the staged
+// pin is what matters, so this is no reason to fail.
+func committedState(ctx context.Context, in info, st *submodule.Status, committed, pin string) error {
+	if _, ok, err := try(ctx, in.dir, "cat-file", "-e", committed+"^{commit}"); err != nil || !ok {
+		return err
+	}
+	c, err := commit(ctx, in.dir, committed)
+	if err != nil {
+		return err
+	}
+	out, err := run(ctx, in.dir, "rev-list", "--left-right", "--count", committed+"..."+pin)
+	if err != nil {
+		return err
+	}
+	if st.CommittedDrift.Ahead, st.CommittedDrift.Behind, err = parseLeftRight(out); err != nil {
+		return err
+	}
+	st.Committed = c
+	return nil
 }
 
 // rootStatus describes the superproject. Its "pin" is HEAD, compared with the
@@ -279,8 +297,9 @@ func (p *Provider) rootStatus(ctx context.Context) (*submodule.Status, error) {
 }
 
 // pinState fills the fields of st that describe pin: whether it is pushed, the
-// ref it resolves to (chosen, if not nil), the commits and the distance to the
-// ref. head is the checked-out commit.
+// ref it resolves to (chosen, if not nil), the commits and the distances: of
+// the checkout to the pin and of the pin to the ref. head is the checked-out
+// commit.
 func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, branch string, chosen *candidate) error {
 	// the pin must exist locally to say anything about it
 	if _, ok, err := try(ctx, in.dir, "cat-file", "-e", pin+"^{commit}"); err != nil {
@@ -320,6 +339,13 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 		if st.CheckedOut, err = commit(ctx, in.dir, head); err != nil {
 			return err
 		}
+		out, err = run(ctx, in.dir, "rev-list", "--left-right", "--count", head+"..."+pin)
+		if err != nil {
+			return err
+		}
+		if st.Drift.Ahead, st.Drift.Behind, err = parseLeftRight(out); err != nil {
+			return err
+		}
 	}
 	if source == submodule.RefFromSHA {
 		st.Pin.Ref = st.Pinned.SHA
@@ -334,13 +360,6 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 	}
 	if st.Pin.Ahead, st.Pin.Behind, err = parseLeftRight(out); err != nil {
 		return err
-	}
-	if st.Pin.Ahead+st.Pin.Behind > 0 {
-		out, err = run(ctx, in.dir, "log", commitFormat, fmt.Sprintf("--max-count=%d", maxBetween), pin+"..."+ref)
-		if err != nil {
-			return err
-		}
-		st.Between = parseCommits(out)
 	}
 	return nil
 }

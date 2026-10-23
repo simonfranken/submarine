@@ -4,6 +4,7 @@ package detail
 import (
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/help"
@@ -100,6 +101,14 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	}
 	st := s.Status
 
+	// the age of the last fetch is right-aligned in the name's line
+	if st.Presence == submodule.PresenceOK {
+		fetched := "fetched " + theme.Ago(st.FetchedAt)
+		if gap := m.width - ansi.StringWidth(s.Name) - len(fetched); gap >= 2 {
+			out[1] += strings.Repeat(" ", gap) + muted.Render(fetched)
+		}
+	}
+
 	issues := st.Issues()
 	for _, is := range issues {
 		out = append(out, t.LevelStyle(is.Level, lipgloss.NewStyle()).Width(labelWidth).Render(theme.IssueWord(is.Kind))+text.Render(is.Detail))
@@ -123,54 +132,13 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	}
 	out = append(out, "")
 
-	// ref
+	// ref and spine
 	if st.Pin.Ref != "" {
-		delta := t.Delta(st.Pin, lipgloss.NewStyle())
-		if delta != "" {
-			delta = " " + delta
-		}
-		out = append(out,
-			label("Ref")+text.Render(st.Pin.Ref)+delta,
-			label("")+muted.Render("via "+st.Pin.Source.String()),
-		)
+		out = append(out, label("Ref")+text.Render(st.Pin.Ref)+muted.Render(" · via "+st.Pin.Source.String()), "")
 	}
-	if st.Presence == submodule.PresenceOK {
-		out = append(out, label("Fetched")+muted.Render(theme.Ago(st.FetchedAt)))
-	}
+	out = append(out, m.spineLines(st.Spine(), st.Checkout == submodule.CheckoutDiffers)...)
 	if s.FetchErr != nil {
 		out = append(out, theme.Fg(t.Warn).Width(labelWidth).Render("fetch")+text.Render("failed: "+s.FetchErr.Error()))
-	}
-
-	// commits
-	commitLine := func(name string, c *submodule.Commit, highlight bool) string {
-		if c == nil {
-			return label(name) + muted.Render("—")
-		}
-		shaStyle := theme.Fg(t.Primary)
-		if highlight {
-			shaStyle = theme.Fg(t.Warn)
-		}
-		return label(name) + shaStyle.Render(c.SHA) + " " + text.Render(c.Subject)
-	}
-	if st.Root {
-		out = append(out, commitLine("HEAD", st.Pinned, false), commitLine("Tip", st.Tip, false))
-	} else {
-		out = append(out,
-			commitLine("Pinned", st.Pinned, false),
-			commitLine("Checkout", st.CheckedOut, st.Checkout == submodule.CheckoutDiffers),
-			commitLine("Tip", st.Tip, false),
-		)
-	}
-
-	// difference between pin and tip
-	if len(st.Between) > 0 {
-		out = append(out, "", text.Render(m.betweenTitle(st.Pin, st.Root)))
-		for _, c := range st.Between {
-			out = append(out,
-				"  "+theme.Fg(t.Primary).Render(c.SHA)+" "+text.Render(c.Subject),
-				"  "+muted.Render(fmt.Sprintf("%7s %s · %s", "", c.Author, theme.Ago(c.When))),
-			)
-		}
 	}
 
 	// children & meta
@@ -213,25 +181,65 @@ func (m Model) hiddenParts(h submodule.Hidden) string {
 	return strings.Join(parts, theme.Fg(t.Muted).Render(", "))
 }
 
-// betweenTitle words the commit list; root says HEAD instead of Pin.
-func (m Model) betweenTitle(p submodule.PinInfo, root bool) string {
-	subject := "Pin"
-	if root {
-		subject = "HEAD"
-	}
-	plural := func(n int) string {
-		if n == 1 {
-			return "commit"
+// spineLines draws the pin, the tip and the checkout as one line of history,
+// newest on top: a node per commit with its roles in the label column, and
+// between two nodes how many commits separate them. offPin colors the
+// checkout's own node.
+func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool) []string {
+	t := m.theme
+	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
+
+	labels := make([]string, len(nodes))
+	width := labelWidth
+	for i, n := range nodes {
+		words := make([]string, len(n.Roles))
+		for j, r := range n.Roles {
+			words[j] = theme.RoleWord(r)
 		}
-		return "commits"
+		labels[i] = strings.Join(words, " · ")
+		if n.InSync() {
+			labels[i] = theme.InSync
+		}
+		width = max(width, ansi.StringWidth(labels[i])+1)
 	}
+
+	// a staged pin below the committed one moves the pin back
+	hasRole := func(n submodule.SpineNode, r submodule.Role) bool { return slices.Contains(n.Roles, r) }
+	pinAt := slices.IndexFunc(nodes, func(n submodule.SpineNode) bool { return hasRole(n, submodule.RolePin) })
+	stagedAt := slices.IndexFunc(nodes, func(n submodule.SpineNode) bool { return hasRole(n, submodule.RoleStaged) })
+
+	var out []string
+	for i, n := range nodes {
+		label, sha := muted, theme.Fg(t.Primary)
+		if hasRole(n, submodule.RoleStaged) {
+			label = theme.Fg(t.Info)
+		}
+		if offPin && len(n.Roles) == 1 && n.Roles[0] == submodule.RoleYou {
+			label, sha = theme.Fg(t.Warn), theme.Fg(t.Warn)
+		}
+		out = append(out, label.Width(width).Render(labels[i])+sha.Render(t.Glyphs.Node+" "+n.Commit.SHA)+" "+text.Render(n.Commit.Subject))
+		if i < len(nodes)-1 {
+			gap := muted.Render(t.Glyphs.Gap + m.linkText(n.Below))
+			if i+1 == stagedAt && pinAt >= 0 && pinAt < stagedAt && n.Below.Linear() {
+				gap += theme.Fg(t.Info).Render(" (staged pin moves back)")
+			}
+			out = append(out, strings.Repeat(" ", width)+gap)
+		}
+	}
+	return out
+}
+
+// linkText words the history between two nodes, with a leading space; empty
+// if it is unknown.
+func (m Model) linkText(l submodule.Link) string {
+	g := m.theme.Glyphs
 	switch {
-	case p.Ahead > 0 && p.Behind > 0:
-		return fmt.Sprintf("%s and %s have diverged (%s%d %s%d):",
-			subject, p.Ref, m.theme.Glyphs.Ahead, p.Ahead, m.theme.Glyphs.Behind, p.Behind)
-	case p.Ahead > 0:
-		return fmt.Sprintf("%s is %d %s ahead of %s:", subject, p.Ahead, plural(p.Ahead), p.Ref)
-	default:
-		return fmt.Sprintf("%s is %d %s behind %s:", subject, p.Behind, plural(p.Behind), p.Ref)
+	case l.Diverged():
+		return fmt.Sprintf(" diverged %s%d %s%d", g.Ahead, l.Below, g.Behind, l.Above)
+	case l.Above == 1:
+		return " 1 commit"
+	case l.Above > 1:
+		return fmt.Sprintf(" %d commits", l.Above)
 	}
+	return ""
 }

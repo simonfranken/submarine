@@ -68,9 +68,6 @@ func TestTree(t *testing.T) {
 	if repo.Branch != "main" {
 		t.Errorf("Branch = %q, want main", repo.Branch)
 	}
-	if !repo.FetchedAt.IsZero() {
-		t.Errorf("FetchedAt = %v, want zero (superproject never fetched)", repo.FetchedAt)
-	}
 	var paths []string
 	submodule.Walk(repo.Submodules, func(s *submodule.Submodule) { paths = append(paths, s.Path) })
 	want := []string{
@@ -98,8 +95,9 @@ func TestStatus(t *testing.T) {
 		behind   int
 		staged   bool
 		checkout submodule.Checkout
+		drift    submodule.Distance // checkout compared with the pin
 	}{
-		{path: "src/core", issues: []submodule.IssueKind{submodule.IssueOffPin}, ref: "origin/main", source: submodule.RefFromDefaultBranch, checkout: submodule.CheckoutDiffers},
+		{path: "src/core", issues: []submodule.IssueKind{submodule.IssueOffPin}, ref: "origin/main", source: submodule.RefFromDefaultBranch, checkout: submodule.CheckoutDiffers, drift: submodule.Distance{Behind: 1}},
 		{path: "src/ui", ref: "origin/main", source: submodule.RefFromCurrentBranch, behind: 2},
 		{path: "src/net", issues: []submodule.IssueKind{submodule.IssueUnpushed}, ref: "origin/main", source: submodule.RefFromCurrentBranch, ahead: 1},
 		{path: "libs/store", ref: "origin/develop", source: submodule.RefFromGitmodules},
@@ -135,11 +133,17 @@ func TestStatus(t *testing.T) {
 		if st.Pin.Ahead != tt.ahead || st.Pin.Behind != tt.behind {
 			t.Errorf("%s: ↑%d↓%d, want ↑%d↓%d", tt.path, st.Pin.Ahead, st.Pin.Behind, tt.ahead, tt.behind)
 		}
-		if len(st.Between) != tt.ahead+tt.behind {
-			t.Errorf("%s: %d commits between, want %d", tt.path, len(st.Between), tt.ahead+tt.behind)
-		}
 		if st.PinStaged != tt.staged {
 			t.Errorf("%s: PinStaged %v, want %v", tt.path, st.PinStaged, tt.staged)
+		}
+		if tt.staged != (st.Committed != nil) {
+			t.Errorf("%s: Committed = %+v with staged = %v", tt.path, st.Committed, tt.staged)
+		}
+		if tt.path == "libs/staged" && (st.CommittedDrift.Ahead != 0 || st.CommittedDrift.Behind == 0) {
+			t.Errorf("%s: CommittedDrift %+v, want the committed pin behind the staged one", tt.path, st.CommittedDrift)
+		}
+		if st.Drift != tt.drift {
+			t.Errorf("%s: drift %+v, want %+v", tt.path, st.Drift, tt.drift)
 		}
 		if st.Checkout != tt.checkout {
 			t.Errorf("%s: Checkout %v, want %v", tt.path, st.Checkout, tt.checkout)
@@ -265,5 +269,28 @@ func TestNewNotARepo(t *testing.T) {
 	}
 	if _, err := New(t.TempDir()); err == nil {
 		t.Error("New(non-repo): want error")
+	}
+}
+
+// A staged pin older than the committed one: the committed pin is ahead.
+func TestCommittedPinAheadOfStaged(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	git(t, filepath.Join(super, "src", "ui"), "checkout", "-q", "--detach", "HEAD~1")
+	git(t, super, "add", "src/ui")
+
+	st, err := p.Status(context.Background(), "src/ui")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !st.PinStaged || st.Committed == nil {
+		t.Fatalf("PinStaged = %v, Committed = %v", st.PinStaged, st.Committed)
+	}
+	if st.CommittedDrift != (submodule.Distance{Ahead: 1}) {
+		t.Errorf("CommittedDrift = %+v, want the committed pin 1 ahead", st.CommittedDrift)
+	}
+	spine := st.Spine()
+	if n := len(spine); n < 2 || spine[n-1].Commit.SHA != st.Pinned.SHA || spine[n-2].Commit.SHA != st.Committed.SHA {
+		t.Errorf("spine = %+v, want the committed pin directly above the staged one", spine)
 	}
 }

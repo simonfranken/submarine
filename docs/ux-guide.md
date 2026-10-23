@@ -15,17 +15,17 @@
 ## Layout
 
 ```
- ~/coding/my_project  main      13 submodules · 1 unpushed · 1 missing · 2 off pin · …   fetched 2m ago
+ ~/coding/my_project  main        1 unpushed · 1 missing · 2 off pin · 2 changed · 13 submodules 
    docs                                  origin/main                     │ src/
  misc/tools/                                                             │ my_submodule_3
      my_submodule_1                      origin/main                     │
      my_submodule_2       missing        a1b2c3d                         │ unpushed  pin not pushed to any remote
  src/                                                                    │
-     my_submodule_1       off pin        origin/main                     │ Ref       origin/main ↑1
-   ▸ my_submodule_2 [2]   changed ·2     origin/main                     │           via checked out branch
-     my_submodule_3       unpushed       origin/main    ↑1               │ Pinned    b7c8d9e Hotfix null pointer
- libs/                                                                   │ Checkout  b7c8d9e Hotfix null pointer
-     logging                             origin/main    ↓3               │ Tip       6f5e4d3 Release 2.1.0
+     my_submodule_1       off pin        origin/main                     │ Ref       origin/main · via checked out branch
+   ▸ my_submodule_2 [2]   changed ·2     origin/main                     │ pin · you ● b7c8d9e Hotfix null pointer
+     my_submodule_3       unpushed       origin/main    ↑1               │           ┊ 1 commit
+ libs/                                                                   │ tip       ● 6f5e4d3 Release 2.1.0
+     logging                             origin/main    ↓3               │
  ↑↓/jk move • ←→/hl fold • ⇧←→/HL fold all • space toggle • ? help • q quit
 ```
 
@@ -75,23 +75,53 @@ indent ▸ name [n]   status          ref             delta
 
 ### Detail pane
 
-For the superproject (header selected), `Pinned` / `Checkout` become one
-`HEAD` line, the commit list says "HEAD is n commits behind …", and
-`Children` becomes `Modules` (count and issues of all submodules). See
+For the superproject (header selected), the `pin` and `you` roles become
+`HEAD`, and `Children` becomes `Modules` (count and issues of all submodules). See
 [Superproject](state-model.md#superproject).
 
-1. Directory (muted) and name (bold)
+1. Directory (muted) and name (bold); `fetched <age>` of the submodule,
+   muted, right-aligned in the name's line (left out if the pane is too
+   narrow, or the submodule is missing)
 2. One line per issue: word (colored, 10 columns) + explanation;
    `in sync  nothing to do` if there are none and no pin is staged;
    `staged` and `detached HEAD on pin` as information
 3. `Changes` (only with uncommitted changes), see
    [Change preview](#change-preview)
-4. `Ref` with distance and `via <rule>`; `Fetched <age>` of the submodule;
+4. `Ref` with `· via <rule>`, a blank line, then the [spine](#spine);
    `fetch  failed: <git's message>` (yellow word) if the last fetch failed
-5. `Pinned`, `Checkout`, `Tip`: SHA + subject; the checkout SHA is yellow if it
-   differs from the pin
-6. "Pin is n commits behind/ahead of …" / "Pin and … have diverged": commit list
-7. `Children` (count and issues below), `URL`
+5. `Children` (count and issues below), `URL`
+
+#### Spine
+
+```
+Ref       origin/main · via .gitmodules branch
+
+tip       ● 3f1bf20 Fix: update package dependencies
+          ┊ 4 commits
+pin       ● 9ac01de Add ethercat node
+          ┊ 2 commits
+you       ● 48005ac Merge branch 'feat/ethercat…
+```
+
+- Newest on top, like `git log`: where each commit is, is read from its
+  position, not by comparing SHAs. The commits between two nodes are not
+  listed, only counted (`┊ 4 commits`; `1 commit` if adjacent).
+- The label column holds the roles (`pin`, `tip`, `you`; `HEAD` for the
+  superproject), joined by ` · ` if they sit on one commit
+  (`pin · tip`, `pin · you`). If all of them sit on one commit it says
+  `in sync` instead, which also keeps the commit column in line with the
+  other values; the column only grows for a longer label.
+- With a staged pin the spine shows both: `staged` (blue label) is the pin
+  in the index, `pin` the one in the superproject's HEAD, so the bump is
+  visible as a distance between two nodes. The committed pin is left out if
+  it is not on disk. If the staged pin is *older* than the committed one it
+  sits below it, and the gap above it says `(staged pin moves back)` (blue).
+- The checkout (`you`) is yellow (label and SHA) when it is on its own node,
+  i.e. off pin. Everything else is the default text color, the gap muted.
+- A diverged pair shows `┊ diverged ↑n ↓m` (arrows from the lower node's
+  view, like the tree). A real fork is not drawn yet.
+- The nodes are `●` (`o` with `SUBMARINE_ASCII`), the gap `┊` (`:`).
+- A missing submodule has only the pin node (SHA, no subject).
 
 #### Change preview
 
@@ -147,7 +177,11 @@ shows the superproject's own state word like a tree row (`in sync`,
 `changed`, `unpushed +1`, spinner, `error`). The counts that follow are
 about submodules only.
 
-`path  branch ↑↓ state · n submodules · n error · <count> <issue>… · n pin staged · n loading · <fetch>`
+`path  branch ↑↓ state            n error · <count> <issue>… · n pin staged · n loading · n submodules · <fetch>`
+
+The summary and `<fetch>` form one group at the right edge; the path,
+branch and state stay at the left. If the line is too narrow it is cut with
+`…` at the right end, so the most important counts stay.
 
 Issue counts are ordered by severity (unpushed, conflict, missing, off pin,
 changed), each in its level color. Zero counts are omitted. `n loading`
@@ -160,12 +194,12 @@ superproject shows `(detached)` as its branch.
 | State | Shows |
 |---|---|
 | fetching | spinner + `fetching 12/174` (repositories done / total) |
-| done | `fetched just now`, then the age (`fetched 5m ago`) |
-| some failed | `fetched just now · 3 failed` (count in yellow) |
-| never fetched | `fetched never` |
+| done | nothing |
+| some failed | `3 failed` (count in yellow) |
 
-The age is the newer of the superproject's `FETCH_HEAD` and the end of the
-application's own fetch.
+The header has no fetch age: the age belongs to one repository, and a header
+age would be read as the age of everything. It is in the detail pane, for
+the selected repository (the superproject's own when the header is selected).
 
 ## Colors
 

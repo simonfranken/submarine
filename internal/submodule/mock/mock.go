@@ -40,10 +40,9 @@ func (p *Provider) Tree(ctx context.Context) (*submodule.Repo, error) {
 	defer p.mu.Unlock()
 	p.statuses = map[string]*submodule.Status{}
 	repo := &submodule.Repo{
-		Path:      "~/coding/my_project",
-		Branch:    "main",
-		Behind:    2,
-		FetchedAt: time.Now().Add(-2 * time.Minute),
+		Path:   "~/coding/my_project",
+		Branch: "main",
+		Behind: 2,
 	}
 	repo.Root = &submodule.Submodule{Name: "my_project", URL: "git@github.com:acme/my_project.git"}
 	p.statuses[""] = rootStatus()
@@ -169,11 +168,7 @@ func rootStatus() *submodule.Status {
 		Pinned:     head,
 		CheckedOut: head,
 		Tip:        tip,
-		Between: []submodule.Commit{
-			*tip,
-			*commit("9d8c7b6", "Drop the legacy module", "chris", 20*time.Hour),
-		},
-		FetchedAt: now.Add(-2 * time.Minute),
+		FetchedAt:  now.Add(-2 * time.Minute),
 	}
 	st.Changes = changes(15*time.Minute, []submodule.FileChange{
 		{Path: "README.md", Kind: submodule.ChangeModified, Added: 4, Removed: 1},
@@ -217,7 +212,7 @@ func fixture() []node {
 		Pinned:     subSubPin,
 		CheckedOut: subSubTip,
 		Tip:        subSubTip,
-		Between:    []submodule.Commit{*subSubTip},
+		Drift:      submodule.Distance{Ahead: 1},
 	}
 
 	schema := inSync("origin/main", commit("1a2b3c4", "Add v3 schema", "ben", 6*24*time.Hour))
@@ -240,6 +235,8 @@ func fixture() []node {
 	crypto := inSync("v1.4.2", cryptoNew)
 	crypto.Pin.Source = submodule.RefFromTag
 	crypto.PinStaged = true
+	crypto.Committed = commit("e0f1a2b", "Release v1.4.1", "ben", 40*24*time.Hour)
+	crypto.CommittedDrift = submodule.Distance{Behind: 3}
 
 	zlib := inSync("v1.3.1", commit("51f2c3e", "zlib 1.3.1", "madler", 300*24*time.Hour))
 	zlib.Pin.Source = submodule.RefFromTag
@@ -259,6 +256,7 @@ func fixture() []node {
 			Pinned:     srcSub1Pin,
 			CheckedOut: srcSub1Head,
 			Tip:        srcSub1Pin,
+			Drift:      submodule.Distance{Ahead: 2},
 		}},
 		{relPath: "src/my_submodule_2", status: srcSub2, children: []node{
 			{relPath: "modules/my_sub_submodule", status: subSub},
@@ -271,29 +269,18 @@ func fixture() []node {
 			Pinned:     unpushed,
 			CheckedOut: unpushed,
 			Tip:        sub3Tip,
-			Between:    []submodule.Commit{*unpushed},
 		}},
 		{relPath: "libs/logging", status: &submodule.Status{
 			Pin:        submodule.PinInfo{Ref: "origin/main", Behind: 3, Pushed: true},
 			Pinned:     logPin,
 			CheckedOut: logPin,
 			Tip:        logTip,
-			Between: []submodule.Commit{
-				*logTip,
-				*commit("7d8e9f0", "Fix race in buffered writer", "dana", 3*24*time.Hour),
-				*commit("6c7d8e9", "Update dependencies", "renovate", 5*24*time.Hour),
-			},
 		}},
 		{relPath: "libs/http", status: &submodule.Status{
 			Pin:        submodule.PinInfo{Ref: "origin/develop", Ahead: 1, Behind: 2, Pushed: true, Source: submodule.RefFromContains},
 			Pinned:     httpPin,
 			CheckedOut: httpPin,
 			Tip:        httpTip,
-			Between: []submodule.Commit{
-				*httpTip,
-				*commit("d0e1f2a", "Refactor transport", "frank", 2*24*time.Hour),
-				*httpPin,
-			},
 		}},
 		{relPath: "libs/crypto", status: crypto},
 		{relPath: "third_party/zlib", status: zlib},

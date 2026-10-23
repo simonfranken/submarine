@@ -18,7 +18,7 @@ transparent.
 pin, so a mismatch was invisible.
 **Decision.** Model all three commits. The tree's ref column always describes
 the **pin**; checkout drift is an issue (`off pin`).
-**Consequences.** The detail pane shows Pinned / Checkout / Tip rows.
+**Consequences.** The detail pane shows all three (see D25).
 
 ## D3 — Raw dimensions in the domain, summarized issues in the UI
 
@@ -303,8 +303,8 @@ not issues.
 submodules that is hundreds of network round trips (and credential or
 host-key failures) every time the tool opens, whether or not the user wants
 fresh remote data.
-**Decision.** Supersedes D18. Nothing is fetched on startup. The header and
-the detail pane show the last fetch (`FETCH_HEAD`, also from fetches made in
+**Decision.** Supersedes D18. Nothing is fetched on startup. The detail pane
+shows the last fetch of the selected repository (`FETCH_HEAD`, also from fetches made in
 other shells), so the user can judge how stale the remote refs are and press
 `f` to fetch. The `--no-fetch` flag is removed with it (it still had the
 side effect of switching off the update check; that has
@@ -386,3 +386,31 @@ restores below, without staging.
 **Consequences.** `Switcher` is a new optional provider interface; the mock
 does not implement it. The switch runs as the restore does (one write
 operation at a time, same lines above the footer).
+
+## D25 — Detail pane: a spine instead of three commit rows and a list
+
+**Context.** `Pinned` / `Checkout` / `Tip` were three rows of SHAs to
+compare, the distance sat on the `Ref` line, and a list of up to 50 commits
+(two lines each) pushed the rest out of view. Where the pin, the checkout and
+the tip are had to be worked out by reading.
+**Decision.** Draw them as one line of history, newest on top: a node per
+commit, the roles in the label column, the number of commits between two
+nodes in a gap row. Roles on one commit share a node. The commit list is
+dropped (no cap, no popup): the gap count says how far, not what changed.
+The `Ref` line loses the distance suffix (the gap says it) and keeps
+`via <rule>`.
+**Consequences.** `Status.Between` is gone; `Status.Drift` (checkout ↔ pin,
+one `rev-list --left-right --count`, only when off pin) and `Status.Spine()`
+are new. Author and age of commits are no longer shown anywhere in the pane.
+Diverged tip or checkout show `diverged ↑n ↓m` in the gap; drawing a real
+fork needs the merge base and is left for later.
+
+**Amendment (with D25).** The header no longer shows `fetched <age>`. It was
+the superproject's own fetch, which the tree's `↓n` do not depend on, and read
+as the age of everything. The age lives only in the detail pane, right-aligned
+in the name's line (the superproject's when the header is selected); the
+header keeps the progress and `n failed`. `Repo.FetchedAt` is gone.
+
+**Amendment (with D25).** A staged pin shows both pins on the spine: `staged`
+(the index) and `pin` (the superproject's HEAD, `Status.Committed`), so a
+bump reads as a distance. Before, only the index pin was shown at all.

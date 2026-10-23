@@ -5,7 +5,6 @@ package tui
 import (
 	"context"
 	"strings"
-	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -151,7 +150,7 @@ func (m *Model) startFetch() tea.Cmd {
 			paths = append(paths, s.Path)
 		}
 	})
-	m.fetch = header.Fetch{Running: true, Total: len(paths), At: m.fetch.At}
+	m.fetch = header.Fetch{Running: true, Total: len(paths)}
 	cmds := []tea.Cmd{m.tick()}
 	for _, p := range paths {
 		f, ctx := m.fetcher, m.ctx
@@ -227,7 +226,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.fetch.Done == m.fetch.Total {
 			m.fetch.Running = false
-			m.fetch.At = time.Now()
 		}
 		return m, nil
 

@@ -114,7 +114,8 @@ The mock provider (`internal/submodule/mock`) covers every state and sleeps
   `Status` calls run at once; the others wait on a semaphore and still
   respect `ctx` (D16).
 - Superproject: branch from `symbolic-ref`, ahead/behind against
-  `@{upstream}`, "fetched" from the mtime of `FETCH_HEAD`.
+  `@{upstream}`. Its fetch age (mtime of `FETCH_HEAD`) is `Status.FetchedAt`
+  of the root node, like a submodule's.
 - `Fetch`: `git fetch --all --prune --no-recurse-submodules --quiet` (we
   fetch every submodule ourselves), at most 8 at once, 2 min timeout each.
   To never prompt, `GIT_SSH_COMMAND="ssh -o BatchMode=yes"` is set unless

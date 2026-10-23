@@ -59,8 +59,8 @@ sub --mock           # built-in sample data, no repository needed
 
 Problems stand out: `unpushed` in red, `off pin` and `changed` in yellow,
 everything else muted. Select a submodule to see the details on the right:
-every issue in words, the resolved ref and why, the pinned, checked-out and
-tip commits, and a preview of uncommitted changes.
+every issue in words, the resolved ref and why, where the pin, the tip and
+your checkout are in the history, and a preview of uncommitted changes.
 
 ```
  src/                                    │ src/
@@ -68,11 +68,10 @@ tip commits, and a preview of uncommitted changes.
    ▸ net [2]     unpushed  origin/main ↑1│
      ui          in sync   origin/main   │ unpushed  pin not pushed to any remote
                                          │
-                                         │ Ref       origin/main ↑1
-                                         │           via checked out branch
-                                         │ Pinned    b7c8d9e Hotfix null pointer
-                                         │ Checkout  b7c8d9e Hotfix null pointer
-                                         │ Tip       6f5e4d3 Release 2.1.0
+                                         │ Ref       origin/main · via checked out branch
+                                         │ pin · you ● b7c8d9e Hotfix null pointer
+                                         │           ┊ 1 commit
+                                         │ tip       ● 6f5e4d3 Release 2.1.0
 ```
 
 ### Jump to a submodule with `/`

@@ -3,9 +3,10 @@ package header
 
 import (
 	"fmt"
-	"time"
+	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"submarine/internal/submodule"
 	"submarine/internal/tui/theme"
@@ -14,10 +15,9 @@ import (
 // Fetch is the progress of the application's own background fetch.
 type Fetch struct {
 	Running bool
-	Done    int       // repositories fetched (or failed)
-	Total   int       // repositories to fetch
-	Failed  int       // failed fetches of the last run
-	At      time.Time // when the last run finished
+	Done    int // repositories fetched (or failed)
+	Total   int // repositories to fetch
+	Failed  int // failed fetches of the last run
 }
 
 // View renders repo info, state counts and fetch state on one line. spinner
@@ -65,47 +65,44 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 		}
 	})
 
+	// most important first: errors, issues by severity, staged pins, then the
+	// total
 	sep := seg(t.Muted, " · ")
-	mid := seg(t.Muted, fmt.Sprintf("%d submodules", total))
+	var parts []string
 	if errored > 0 {
-		mid += sep + t.LevelStyle(submodule.LevelDanger, bar).Render(fmt.Sprintf("%d error", errored))
+		parts = append(parts, t.LevelStyle(submodule.LevelDanger, bar).Render(fmt.Sprintf("%d error", errored)))
 	}
 	for _, k := range []submodule.IssueKind{
 		submodule.IssueUnpushed, submodule.IssueConflict, submodule.IssueMissing,
 		submodule.IssueOffPin, submodule.IssueChanged,
 	} {
 		if n := perKind[k]; n > 0 {
-			mid += sep + t.LevelStyle(level[k], bar).Render(fmt.Sprintf("%d %s", n, theme.IssueWord(k)))
+			parts = append(parts, t.LevelStyle(level[k], bar).Render(fmt.Sprintf("%d %s", n, theme.IssueWord(k))))
 		}
 	}
 	if staged > 0 {
-		mid += sep + seg(t.Info, fmt.Sprintf("%d pin staged", staged))
+		parts = append(parts, seg(t.Info, fmt.Sprintf("%d pin staged", staged)))
 	}
 	if loading > 0 {
-		mid += sep + seg(t.Muted, fmt.Sprintf("%d loading", loading))
+		parts = append(parts, seg(t.Muted, fmt.Sprintf("%d loading", loading)))
 	}
+	parts = append(parts, seg(t.Muted, fmt.Sprintf("%d submodules", total)))
+	mid := strings.Join(parts, sep)
 
-	var right string
+	// the summary and the fetch state form one group at the right edge
+	right := mid
 	switch {
 	case fetch.Running:
-		right = seg(t.Primary, spinner) + seg(t.Muted, fmt.Sprintf(" fetching %d/%d ", fetch.Done, fetch.Total))
-	default:
-		// our own fetch may have finished before the watcher saw FETCH_HEAD
-		at := repo.FetchedAt
-		if fetch.At.After(at) {
-			at = fetch.At
-		}
-		right = seg(t.Muted, "fetched "+theme.Ago(at))
-		if fetch.Failed > 0 {
-			right += seg(t.Muted, " · ") + seg(t.Warn, fmt.Sprintf("%d failed", fetch.Failed))
-		}
-		right += seg(t.Muted, " ")
+		right += sep + seg(t.Primary, spinner) + seg(t.Muted, fmt.Sprintf(" fetching %d/%d", fetch.Done, fetch.Total))
+	case fetch.Failed > 0:
+		right += sep + seg(t.Warn, fmt.Sprintf("%d failed", fetch.Failed))
 	}
+	right += seg(t.Muted, " ")
 
-	gap := width - lipgloss.Width(left) - lipgloss.Width(mid) - lipgloss.Width(right)
+	gap := width - lipgloss.Width(left) - lipgloss.Width(right)
 	if gap < 4 {
-		return bar.Width(width).MaxWidth(width).Render(left + seg(t.Text, "   ") + mid)
+		// too narrow: the least important part, on the right, is cut
+		return bar.Width(width).Render(ansi.Truncate(left+seg(t.Text, "   ")+mid, width, "…"))
 	}
-	sp := func(n int) string { return bar.Render(fmt.Sprintf("%*s", n, "")) }
-	return left + sp(gap/2) + mid + sp(gap-gap/2) + right
+	return left + bar.Render(fmt.Sprintf("%*s", gap, "")) + right
 }

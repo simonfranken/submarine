@@ -59,11 +59,14 @@ commit hashes. It doesn't answer the questions users actually have:
 
 - **F20** Shows the selected submodule (or the superproject): full path, name, all issues in
   words, staged-pin and detached-HEAD notes.
-- **F21** Shows the resolved ref, how it was resolved, and three commits:
-  **Pinned**, **Checkout** and **Tip** (SHA + subject). A checkout that
-  differs from the pin is highlighted.
-- **F22** Lists the commits between pin and tip (SHA, subject, author, age)
-  with a title stating ahead/behind/diverged.
+- **F21** Shows the resolved ref, how it was resolved, and the **pin** (and
+  the **staged** pin, if there is one), the
+  **tip** and the checkout (**you**) as one line of history, newest on top:
+  a node per commit (SHA + subject) with its roles, and the number of
+  commits between two nodes. Roles on the same commit share a node. A
+  checkout that differs from the pin is highlighted.
+- **F22** *(dropped)* The commits between pin and tip are not listed; only
+  their number is shown (F21).
 - **F23** Shows child count, issues below, and the remote URL.
 - **F24** For a submodule with uncommitted changes, previews the changed
   files so the user can remember what they were doing: a flat list with a
@@ -78,8 +81,8 @@ commit hashes. It doesn't answer the questions users actually have:
   or untracked, untracked repositories (e.g. a submodule clone the current
   branch no longer has), conflicts, and HEAD not pushed. Its HEAD is compared
   with the upstream of the branch. Submodules do not count for it, their rows
-  show them. The detail pane shows it like a submodule (HEAD and Tip instead
-  of Pinned and Checkout, a summary of all submodules instead of Children).
+  show them. The detail pane shows it like a submodule (HEAD and tip instead
+  of pin and you, a summary of all submodules instead of Children).
   See [state-model.md](state-model.md#superproject).
 
 ### Header and footer
@@ -100,8 +103,8 @@ commit hashes. It doesn't answer the questions users actually have:
 
 ### Fetch and refresh
 
-- **F50** Nothing is fetched on startup. The header and the detail pane show
-  when the repositories were last fetched (`FETCH_HEAD`), whoever did it.
+- **F50** Nothing is fetched on startup. The detail pane shows
+  when the selected repository was last fetched (`FETCH_HEAD`), whoever did it.
   `f` fetches the superproject and every initialized submodule in the
   background (all remotes, with prune).
 - **F51** While fetching, the header shows progress (`fetching 12/174`)
