@@ -20,7 +20,7 @@ internal/submodule/git/       provider using the git CLI (reads, fetch, watch)
   fetch.go                    Fetch (network), Fetchable
   watch.go                    Watch: polls git metadata for changes
   restore.go                  Restore, RestoreLoss (network: only what is missing)
-  switch.go                   Branches, SwitchLoss, Switch (stage the tip, restore, attach the branch)
+  switch.go                   Branches, SwitchLoss, Switch (stage the tip, restore, attach or fast-forward the branch)
   gitdir.go                   resolves .git dirs and gitdir: files
 internal/submodule/mock/      fixture provider with artificial latency
 internal/update/              self-update from the package registry; NO UI imports
@@ -28,6 +28,7 @@ internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
   keys.go                     key bindings (also feed the help view)
   restore.go, switch.go       restore / switch flows; a switch reuses restoreState
+  pinupdate.go                update pin (u): a switch to the pin's ref, at the tip the row shows
   overlay.go                  draws the picker over the finished view at the position the picker reports
   msgs.go                     tree/status/fetch/change messages
   refresh.go                  reloader: one load per key, coalesced reruns

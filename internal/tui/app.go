@@ -451,6 +451,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startRestore()
 	case key.Matches(msg, k.Switch):
 		return m.startSwitch()
+	case key.Matches(msg, k.Update):
+		return m.startPinUpdate()
 	case key.Matches(msg, k.Issues):
 		m.tree.SetProblemsOnly(!m.tree.ProblemsOnly())
 		m.layout()

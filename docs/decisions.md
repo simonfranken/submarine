@@ -362,7 +362,7 @@ Enter on a branch of a submodule stages its tip as the pin in the parent's
 index and restores the submodule to it (D23, recursion included); then HEAD
 is put on the branch. On the superproject it checks the branch out and
 restores below, without staging.
-- *Key `b`*, not `s`, which stays reserved for stage pin.
+- *Key `b`*, not `s`, which stays reserved for stage pin (dropped, D29).
 - *Remote branch.* A local branch of that name is created, tracking it. If
   one exists at another commit it is **not moved**: HEAD stays detached at
   the tip and the flash says so (restore never moves branches, D23).
@@ -530,3 +530,40 @@ the pin, the ref is resolved (as for `Status`) and one `switch` runs. No
 network. `detached HEAD on pin` is now left only where no branch is at the
 pin. Switch keeps its own rule for the repository it switches; the
 submodules below it follow this one.
+
+## D29 — Update pin instead of stage pin; switch fast-forwards a branch behind
+
+**Context.** Stage pin (record the checkout as the pin) was drafted, but a
+commit made in a submodule is on a branch, and switching to that branch
+(`b`) already stages it. The common job is a different one: a pin that is
+behind its branch (`origin/main ↓2`) should move to the tip. With `b` that
+is a search in the popup, and it often ended detached, because the local
+`main` sat at the old pin and was never moved (D24).
+**Decision.** `u` updates the pin of a submodule to the tip of its ref, only
+when the pin is behind it and not ahead. It is a switch to that branch (D24)
+with the tip the row shows: nothing is fetched, and if the ref moved
+meanwhile nothing happens. Switch (and so `u`) now fast-forwards a local
+branch that is an ancestor of the tip, unless a worktree has it checked out;
+`update-ref` with the old tip makes the move fail if the branch moved. Stage
+pin is dropped.
+- *No fetch.* The user sees `↓2` and gets those two commits; a fetch first
+  would update to something the screen never showed. `f` is separate.
+- *Only behind.* A diverged pin has commits the ref lacks; moving it would
+  drop them from the record, so that is a deliberate `b`.
+- *The superproject too.* Its pin is HEAD and its ref the upstream, so `u`
+  there is `git pull --ff-only` plus a restore of the submodules. Switch
+  keeps a checked-out branch that tracks the chosen remote branch under
+  another name (`dev` tracking `origin/main`), so an update never changes
+  the branch.
+- *One at a time.* Updating several at once is left for later.
+- *Fast-forward only.* A local branch with commits of its own is never
+  moved, as before. Restore (D23, D28) still never moves a branch: it goes
+  back to the recorded pin, where moving branches has no place.
+**Alternatives.** Keeping stage pin: it covers only a commit on no branch,
+which then is `unpushed` anyway. `u` fetching first (a real pull): rejected,
+see above. Resetting a local branch with commits of its own: loses them from
+the branch.
+**Consequences.** Amends D24 ("not moved") and D28's note that switch keeps
+its own rule. No new provider interface: `u` is `Branches`, `SwitchLoss` and
+`Switch`. Since `Status.Tip.SHA` is abbreviated, the UI compares it as a
+prefix of the branch's full SHA.

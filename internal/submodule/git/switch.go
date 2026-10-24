@@ -90,8 +90,11 @@ func (p *Provider) SwitchLoss(ctx context.Context, path string, b submodule.Bran
 
 // Switch makes b's tip the staged pin of a submodule, restores the repository
 // to it (see Restore) and puts HEAD on the branch. For a remote branch the
-// local branch of that name is created, tracking it. A local branch that
-// exists elsewhere is never moved: HEAD stays detached and "" is returned.
+// local branch is the one checked out before if it tracks b, else the one
+// of that name, created tracking b if there is none. A local branch that is
+// only behind the tip is fast-forwarded; one with commits of its own, or
+// checked out in another worktree, is never moved: HEAD stays detached and
+// "" is returned.
 func (p *Provider) Switch(ctx context.Context, path string, b submodule.Branch) (string, error) {
 	dir, in, sub, err := p.switchDir(path)
 	if err != nil {
@@ -101,6 +104,10 @@ func (p *Provider) Switch(ctx context.Context, path string, b submodule.Branch) 
 		return "", err
 	} else if !ok || sha != b.SHA {
 		return "", fmt.Errorf("%s moved; open the list again", b.Name)
+	}
+	prev, _, err := try(ctx, dir, "symbolic-ref", "--short", "-q", "HEAD")
+	if err != nil {
+		return "", err
 	}
 	if sub { // staged first, so a failed restore can be repeated with x
 		if _, err := p.exec(ctx, in.superDir, nil, "update-index", "--cacheinfo", "160000,"+b.SHA+","+in.relPath); err != nil {
@@ -118,15 +125,51 @@ func (p *Provider) Switch(ctx context.Context, path string, b submodule.Branch) 
 		_, err := g("switch", "-q", b.Local)
 		return b.Local, err
 	}
-	switch tip, ok, err := try(ctx, dir, "rev-parse", "--verify", "-q", "refs/heads/"+b.Local); {
+	local := b.Local
+	if prev != "" && prev != local {
+		if up, ok, err := upstream(ctx, dir, prev); err != nil {
+			return "", err
+		} else if ok && up == b.Name {
+			local = prev // e.g. dev tracking origin/main: an update stays on dev
+		}
+	}
+	switch tip, ok, err := try(ctx, dir, "rev-parse", "--verify", "-q", "refs/heads/"+local); {
 	case err != nil:
 		return "", err
 	case !ok:
-		_, err := g("switch", "-q", "-c", b.Local, "--track", b.Name)
-		return b.Local, err
+		_, err := g("switch", "-q", "-c", local, "--track", b.Name)
+		return local, err
 	case tip == b.SHA:
-		_, err := g("switch", "-q", b.Local)
-		return b.Local, err
+		_, err := g("switch", "-q", local)
+		return local, err
+	default:
+		if ok, err := p.fastForward(ctx, dir, local, tip, b.SHA); err != nil || !ok {
+			return "", err
+		}
+		_, err := g("switch", "-q", local)
+		return local, err
 	}
-	return "", nil
+}
+
+// fastForward moves the local branch from tip to sha if that loses nothing:
+// tip is an ancestor of sha and no worktree has the branch checked out. It
+// reports whether the branch was moved; a branch that moved meanwhile is
+// left alone.
+func (p *Provider) fastForward(ctx context.Context, dir, local, tip, sha string) (bool, error) {
+	if _, ok, err := try(ctx, dir, "merge-base", "--is-ancestor", tip, sha); err != nil || !ok {
+		return false, err
+	}
+	wts, err := run(ctx, dir, "worktree", "list", "--porcelain")
+	if err != nil {
+		return false, err
+	}
+	for _, line := range strings.Split(wts, "\n") {
+		if line == "branch refs/heads/"+local {
+			return false, nil
+		}
+	}
+	if _, ok, err := try(ctx, dir, "update-ref", "-m", "submarine: fast-forward", "refs/heads/"+local, sha, tip); err != nil || !ok {
+		return false, err
+	}
+	return true, nil
 }

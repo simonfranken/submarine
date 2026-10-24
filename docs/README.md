@@ -14,7 +14,7 @@ bare commit hash.
 | [state-model.md](state-model.md) | How a submodule's state is determined, summarized into issues, and how pins are resolved to refs |
 | [ux-guide.md](ux-guide.md) | Layout, attention hierarchy, colors, wording, navigation and key bindings |
 | [architecture.md](architecture.md) | Package layout, the provider boundary, async loading, testing |
-| [actions.md](actions.md) | the write actions restore and switch branch (done) and stage pin (draft) |
+| [actions.md](actions.md) | the write actions restore, switch branch and update pin |
 | [decisions.md](decisions.md) | Decision log with rationale (ADR style) |
 
 ## Install
@@ -33,10 +33,11 @@ Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
 through a git provider (`internal/submodule/git`): `submarine [dir]`. It
 fetches only when asked (`f`) and follows changes made in other shells. `submarine --mock` shows
 the built-in mock data (`internal/submodule/mock`). `!` shows only
-submodules with problems. `x` restores the selection and `b` switches its
-branch ([actions.md](actions.md)); stage pin is drafted there.
+submodules with problems. `x` restores the selection, `b` switches its
+branch and `u` updates a pin that is behind ([actions.md](actions.md)).
 
 Next steps, roughly in order:
 
-1. Stage pin, see [actions.md](actions.md). (Restore and switch branch are done.)
+1. (done) Write actions: restore, switch branch, update pin, see
+   [actions.md](actions.md). Stage pin was dropped (D29).
 2. (done) "Problems only" (`!`) view, reusing the tree's filter.

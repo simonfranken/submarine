@@ -1,8 +1,9 @@
 # Actions (draft)
 
-**Status:** [Restore](#restore) (key `x`, [D23](decisions.md)) and
-[Switch branch](#switch-branch) (key `b`, [D24](decisions.md)) are implemented. [Stage pin](#stage-pin) is still a draft; its open
-questions are [at the end](#open-questions).
+**Status:** [Restore](#restore) (key `x`, [D23](decisions.md)),
+[Switch branch](#switch-branch) (key `b`, [D24](decisions.md)) and
+[Update pin](#update-pin) (key `u`, [D29](decisions.md)) are implemented.
+Stage pin was dropped ([D29](decisions.md)).
 
 ## Principle
 
@@ -13,12 +14,12 @@ a difference in one of two directions:
 | Action | Direction | Key |
 |---|---|---|
 | [Restore](#restore) | The worktree follows the recorded state | `x` |
-| [Stage pin](#stage-pin) | The recorded state follows the worktree | `s` |
 | [Switch branch](#switch-branch) | Both: the branch tip is recorded, then restored to | `b` |
+| [Update pin](#update-pin) | Both: a switch to the tip of the pin's ref | `u` |
 
-There is nothing else for now. Committing, pushing and bumping a pin to the
-tip are done outside submarine. A bump is "check out the tip in the
-submodule, then `s`" (or switch to the branch with `b`).
+There is nothing else for now. Committing and pushing are done outside
+submarine. Recording a commit made in a submodule is a switch to its branch
+(`b`); a commit on no branch must get one first.
 
 ## Restore
 
@@ -258,9 +259,14 @@ For a **submodule**, with the tip `T` the list showed:
 2. The submodule, and everything below it, is [restored](#restore) to `T`.
 3. HEAD is put on the branch (the branch name is the local one):
    - a local branch: checked out;
-   - a remote branch `origin/feat`: the local branch `feat` is created,
-     tracking it; if `feat` exists at `T` it is checked out; if it exists
-     **elsewhere** it is not moved and HEAD stays detached at `T`.
+   - a remote branch `origin/feat`: the local branch is the one checked out
+     before if it tracks `origin/feat` (e.g. `dev`), else `feat`. It is
+     created, tracking it, if it does not exist; if it exists at `T` it is
+     checked out; if it is only
+     **behind** `T` (an ancestor of it) it is fast-forwarded to `T` and
+     checked out ([D29](decisions.md)); if it has commits of its own, or is
+     checked out in another worktree, it is **not moved** and HEAD stays
+     detached at `T`.
 
 For the **superproject** step 1 is left out: the branch is checked out via the
 restore, so its submodules follow the pins of the new commit (staged pins of
@@ -279,7 +285,7 @@ only if something would be lost. A submodule that is not initialized can't be
 switched (`src/app is not initialized; restore it first`). Network: only what
 is missing below, like restore. Lines above the footer: `checking …`,
 `switching src/app to origin/feat…`; flash `switched src/app to feat` (or
-`… to origin/feat (detached: local feat is elsewhere)`); failure
+`… to origin/feat (detached: local feat can't be fast-forwarded)`); failure
 `switch of src/app to origin/feat failed: …`, until the next key. One
 restore or switch runs at a time.
 
@@ -287,72 +293,80 @@ restore or switch runs at a time.
 
 `git.Provider.Switch` (`internal/submodule/git/switch.go`): verify the ref is
 still `T`; `update-index --cacheinfo` in the parent; `restoreRepo` (see
-restore); then `switch` / `switch -c <local> --track <remote-branch>`. The restore leaves HEAD of the
+restore); then `switch` / `switch -c <local> --track <remote-branch>`; a local branch
+behind `T` is first moved with `merge-base --is-ancestor <local> T`, a look
+at `worktree list --porcelain` and `update-ref refs/heads/<local> T <old>`
+(which fails if the branch moved meanwhile). The restore leaves HEAD of the
 switched repository alone (Switch puts it on the chosen branch); the
 submodules below it are attached as in a restore.
 `SwitchLoss` is `lossOf` with `T` as the target. `Branches` is one
 `for-each-ref`, without the `origin/HEAD` symref.
 
-## Stage pin
+## Update pin
 
-Records the commit checked out in a submodule as its new pin in the
-parent's index. It is the same as `git add <path>` in the parent, but only
-when it is safe.
+Moves the pin of a submodule to the tip of its ref, the branch the row shows
+(`origin/main ↓2`). It is a [switch](#switch-branch) to that branch, with the
+tip the row shows: nothing is fetched, so `u` gives exactly the commits the
+row counts. `f` is what brings newer ones.
+
+On the **superproject** the pin is HEAD and the ref is the upstream of its
+branch (the header's `main ↓1`): `u` fast-forwards the branch to it, like
+`git pull --ff-only`, and restores the submodules to the pins of the new
+commit.
 
 ### Available when
 
 All of:
 
-- the selected node is a submodule, not the superproject;
-- it is `off pin` (`Checkout == CheckoutDiffers`): HEAD differs from the
-  pin in the parent's index;
-- its worktree is **clean** (`Worktree == WorktreeClean`). Uncommitted
-  changes, untracked files and conflicts count as dirty, the same rule as
-  the `changed` issue. A moved nested pin counts as a change too, so nested
-  submodules are staged bottom-up: first inside the submodule, then the
-  submodule itself (after a commit in it, outside submarine).
-
-Changes *inside* nested submodules don't count. Like the `changed` issue,
-staging only looks at the submodule's own worktree.
+- it is initialized and its state is loaded;
+- its ref is a remote branch (not a tag, a SHA or a local branch) and has a
+  tip; for the superproject: its branch has an upstream;
+- the pin is **behind** the ref and not ahead (`Behind > 0`, `Ahead == 0`).
+  A diverged pin (`↑n↓m`) is left to `b`: moving it would drop the pin's
+  own commits from the record.
 
 ### Effect
 
-- The parent's index records the submodule's HEAD as the gitlink of its
-  path. Nothing else changes: no worktree, no other index entry, no commit.
-- The submodule then shows `staged` (or `●` next to an issue), and the
-  `off pin` issue is gone.
-- If the checkout equals the pin in the parent's `HEAD`, staging removes
-  the staged pin instead (the index equals `HEAD` again).
-- If the checked-out commit is not pushed, it is staged anyway. The row
-  then shows `unpushed` (Danger), which is the warning.
-- There is no confirmation: nothing is lost.
-- Undo: restore the submodule and choose `c` (committed pin), see
-  [Target](#target).
+The same as [switching](#switch-branch) to the ref: the tip is staged
+as the pin, the submodule and everything below it are restored to it, and
+HEAD is put on the local branch. A local branch that is only behind is
+fast-forwarded, so the common case (local `main` at the old pin) ends on
+`main`. A checked-out branch that tracks the ref under another name (`dev`
+tracking `origin/main`) is the one used, so the update stays on it. For the
+superproject staged pins are lost, as in a switch (and counted).
+
+If the ref no longer points at the tip the row showed (a fetch meanwhile),
+nothing happens: `can't update src/app: origin/main moved; check the new
+state`. The watcher has updated the row by then; `u` again takes the new
+tip.
+
+### Confirmation, lines, errors
+
+As for switch: the question appears only if something would be lost
+(`Update src/app to origin/main? Discards …   y update · n cancel`). Lines
+above the footer: `checking src/app…`, `updating src/app to origin/main…`;
+flash `updated src/app to main`; failure `update of src/app to origin/main
+failed: …`.
 
 ### Implementation note
 
-```sh
-# in the submodule
-git rev-parse HEAD                  # must still be the SHA shown in the UI, else abort
-# in the parent
-git update-index --cacheinfo 160000,<sha>,<path>
-```
-
-`update-index` stages exactly the SHA that was checked, independent of the
-worktree. Flash: `staged pin of src/app` on success; git's message on
-failure.
+The UI only: `startPinUpdate` (`internal/tui/pinupdate.go`) reads the
+branches (`Switcher.Branches`), takes the one named like `Pin.Ref`, checks
+that its tip still starts with the abbreviated `Status.Tip.SHA`, and then
+runs the switch flow with it (`SwitchLoss`, `Switch`).
 
 ## Keys and palette
 
-Both are submodule keys (`keyMap.Submodule`), shown in the detail pane's
-palette, or in the footer when the pane can't show it. Restore is always
-offered: it is idempotent, and the palette is static.
+All three are submodule keys (`keyMap.Submodule`), shown in the detail
+pane's palette, or in the footer when the pane can't show it. They are
+always offered, the palette is static: restore is idempotent, and `u` says
+why it can't update.
 
 | Key | Action | Pressed when not possible (flash) |
 |---|---|---|
 | `x` restore | Restore the selection | `this data source can't restore` (mock); `wait for the restore of … to finish` |
 | `b` switch branch | [Switch branch](#switch-branch) | `this data source can't switch branches`; `wait for the restore of … to finish`; `src/app is not initialized; restore it first` |
-| `s` stage pin | [Stage pin](#stage-pin), not implemented | `src/app is on its pin` / `src/app has uncommitted changes; commit or restore them first` / `the superproject has no pin` |
+| `u` update pin | [Update pin](#update-pin) | `this data source can't update pins`; `wait for the restore of … to finish`; `the superproject has no upstream branch`; `src/app is still loading`; `src/app is not initialized; restore it first`; `the pin of src/app is not on a branch`; `the pin of src/app has diverged from origin/main; b switches the branch`; `the pin of src/app is ahead of origin/main`; `src/app is up to date with origin/main` (the superproject without `the pin of`); after the check `can't update src/app: main is a local branch; b switches to it` |
 
 `R` would sit next to `r` (reload), a dangerous mix-up for a destructive
 action, hence `x`.
@@ -376,12 +390,19 @@ action, hence `x`.
 - UI (`internal/tui/restore_test.go`): restores at once without a loss, asks
   with one (`y` restores, anything else cancels), the mock can't restore.
 - Switch: provider (`switch_test.go`): list without `origin/HEAD`, local
-  first; a remote pick stages the tip and creates a tracking branch; an
-  existing local branch elsewhere is not moved; a moved ref aborts; the
+  first; a remote pick stages the tip and creates a tracking branch; a
+  local branch that is only behind is fast-forwarded; one with commits of
+  its own, or checked out in another worktree, is not moved; a moved ref aborts; the
   superproject switch ends exact; the loss is the restore's. Picker
   (`branches_test.go`): filter, selection, scrolling. UI (`switch_test.go`):
   opens, filters, enter switches, asks with a loss, esc closes, the mock
   can't.
+- Update pin: UI (`pinupdate_test.go`): switches to the tip of the ref, asks
+  with a loss, aborts if the ref moved, refuses (with its flash) a pin that
+  is up to date, ahead, diverged, on a tag, on a local branch or not
+  initialized; updates the superproject, not one without an upstream.
+  Provider: the superproject's branch is fast-forwarded; a checked-out
+  branch that tracks the remote branch under another name is kept.
 - By hand in tmux on a fixture, see
   [architecture.md](architecture.md#testing).
 
@@ -392,7 +413,5 @@ submodule is restored to the index gitlink, so a staged pin is its target and
 survives; restore may clone and fetch what is missing; the key is `x`; it
 asks only if something would be lost.
 
-Open (stage pin):
-
-1. **Key.** `s`?
-2. **Palette.** Show it always (like restore), or only while it applies?
+Open (update pin): updating several submodules at once (on the superproject
+or a collapsed parent), deliberately left out for now.

@@ -156,7 +156,13 @@ commit hashes. It doesn't answer the questions users actually have:
   with everything below; HEAD ends on the branch. It asks for confirmation
   only if something would be lost. See [actions.md](actions.md#switch-branch).
 
-Stage pin is drafted in [actions.md](actions.md#stage-pin).
+- **F59** `u` updates the pin of the selection to the tip of its ref, when
+  the pin is only behind it (`origin/main ↓2`): a switch (**F57**) to that
+  branch, with exactly the tip the row shows. For the superproject that is
+  a fast-forward of its branch to its upstream (`git pull --ff-only`). Nothing is fetched; if
+  the ref moved meanwhile, nothing happens. A local branch that is only
+  behind is fast-forwarded, in a switch too. Otherwise the footer says why
+  not. See [actions.md](actions.md#update-pin).
 
 ## Usage
 

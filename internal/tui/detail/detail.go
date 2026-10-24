@@ -55,20 +55,41 @@ func (m Model) View(s *submodule.Submodule, repo *submodule.Repo) string {
 		lines[i] = ansi.Truncate(l, m.width, "…")
 	}
 	height := m.height
-	var palette string
+	var palette []string
 	if m.PaletteVisible() {
-		height-- // the palette is the last line
-		m.help.Width = 0
-		palette = ansi.Truncate(m.help.ShortHelpView(m.actions), m.width, "…")
+		palette = m.palette()
+		height -= len(palette) // the palette is at the bottom
 	}
 	if len(lines) > height {
 		lines = lines[:height]
 	}
 	body := lipgloss.NewStyle().Width(m.width).Height(height).Render(strings.Join(lines, "\n"))
-	if palette == "" {
+	if len(palette) == 0 {
 		return body
 	}
-	return body + "\n" + palette
+	return body + "\n" + strings.Join(palette, "\n")
+}
+
+// palette lays the actions out on as many lines as the width needs, so no
+// key is cut off.
+func (m Model) palette() []string {
+	m.help.Width = 0
+	var out []string
+	var cur []key.Binding
+	for _, b := range m.actions {
+		if len(cur) > 0 && lipgloss.Width(m.help.ShortHelpView(append(cur, b))) > m.width {
+			out = append(out, m.help.ShortHelpView(cur))
+			cur = nil
+		}
+		cur = append(cur, b)
+	}
+	if len(cur) > 0 {
+		out = append(out, m.help.ShortHelpView(cur))
+	}
+	for i, l := range out {
+		out[i] = ansi.Truncate(l, m.width, "…")
+	}
+	return out
 }
 
 func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {

@@ -46,9 +46,10 @@ Keys come in three groups (`keyMap.Navigation`, `.Submodule`, `.Global`):
   release exists, `q quit and update to vX` follows them as the right-most
   item, on a highlighted background (`Theme.Highlight`: black on Primary), and
   plain quit is `Q` (see D27).
-- **Submodule** (act on the selected one, e.g. `c`): a palette on the last
-  line of the detail pane. It is left out if the pane is shorter than 12
-  lines. Whenever the palette isn't shown (pane hidden or too short), these
+- **Submodule** (act on the selected one, e.g. `c`): a palette at the
+  bottom of the detail pane, wrapped onto a second line if the pane is too
+  narrow for all keys (none is cut off). It is left out if the pane is
+  shorter than 12 lines. Whenever the palette isn't shown (pane hidden or too short), these
   keys move into the footer after the navigation keys.
 
 If the footer is too narrow, keys are dropped from the left group's end
@@ -393,6 +394,16 @@ than `Muted`, so the popup has the focus.
   [restore](#restore): `checking`, the question `Switch src/app to
   origin/feat? Discards …   y switch · n cancel`, `switching …`.
 
+### Update pin
+
+`u` runs without a popup, on the line above the footer like a
+[switch](#switch-branch): `checking src/app…`, the question `Update src/app
+to origin/main? Discards …   y update · n cancel` only if something would be
+lost, `updating src/app to origin/main…`, then the flash `updated src/app to
+main`. On the header the name is `the superproject` (`updated the
+superproject to main`). Where it can't update, a flash says why (see
+[actions.md](actions.md#keys-and-palette)).
+
 ### Key reference
 
 Every key in the UI, where it is shown. Update this
@@ -410,6 +421,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `home` / `g`, `end` / `G` | Header / last submodule | Navigation | Help |
 | `pgup`, `pgdn` | Move by one screen | Navigation | Help |
 | `c` | Copy path | Submodule | Palette, Help |
+| `u` | Update pin to the tip of its ref (superproject: fast-forward to upstream) | Submodule | Palette, Help |
 | `b` | Switch branch (popup) | Submodule | Palette, Help |
 | `x` | Restore | Submodule | Palette, Help |
 | `f` | Fetch all repositories | Global | Help |

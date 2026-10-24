@@ -9,7 +9,7 @@ type keyMap struct {
 	CollapseAll, ExpandAll        key.Binding
 	Home, End, PageUp, PageDown   key.Binding
 	Fetch, Reload, Filter, Issues key.Binding
-	Copy, Restore, Switch         key.Binding
+	Copy, Restore, Switch, Update key.Binding
 	Help, Quit, QuitUpdate        key.Binding
 }
 
@@ -32,6 +32,7 @@ func defaultKeys() keyMap {
 		Issues:      key.NewBinding(key.WithKeys("!"), key.WithHelp("!", "problems only")),
 		Restore:     key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "restore")),
 		Switch:      key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "switch branch")),
+		Update:      key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "update pin")),
 		Copy:        key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy path")),
 		Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:        key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
@@ -56,7 +57,9 @@ func (k keyMap) Navigation() []key.Binding {
 
 // Submodule returns the bindings that act on the selected submodule. They
 // are shown in the detail pane, or in the footer if the pane can't show them.
-func (k keyMap) Submodule() []key.Binding { return []key.Binding{k.Copy, k.Switch, k.Restore} }
+func (k keyMap) Submodule() []key.Binding {
+	return []key.Binding{k.Copy, k.Update, k.Switch, k.Restore}
+}
 
 // Global returns the bindings that don't depend on the selection.
 func (k keyMap) Global() []key.Binding { return []key.Binding{k.Help, k.Quit} }
@@ -87,7 +90,7 @@ func (k keyMap) FullHelp() [][]key.Binding {
 		{k.Up, k.Down, k.Left, k.Right, k.Toggle},
 		{k.CollapseAll, k.ExpandAll},
 		{k.Home, k.End, k.PageUp, k.PageDown},
-		{k.Copy, k.Switch, k.Restore},
+		{k.Copy, k.Update, k.Switch, k.Restore},
 		{k.Fetch, k.Reload, k.Filter, k.Issues},
 		append([]key.Binding{k.Help, k.Quit}, k.fullUpdate()...),
 	}

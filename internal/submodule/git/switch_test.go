@@ -81,12 +81,15 @@ func TestSwitchSubmoduleStagesTipAndTracksRemoteBranch(t *testing.T) {
 	assertExact(t, sub)
 }
 
-func TestSwitchNeverMovesAnExistingLocalBranch(t *testing.T) {
+func TestSwitchNeverMovesALocalBranchWithCommitsOfItsOwn(t *testing.T) {
 	p, root := ownFixture(t)
 	sub := filepath.Join(root, "super", "libs", "feature")
 	ctx := context.Background()
 
-	git(t, sub, "branch", "feat/search", "origin/main") // same name, elsewhere
+	// same name, diverged: a commit of its own on top of origin/main
+	git(t, sub, "switch", "-q", "-c", "feat/search", "origin/main")
+	git(t, sub, "commit", "-q", "--allow-empty", "-m", "own")
+	git(t, sub, "switch", "-q", "--detach", "HEAD~1")
 	before := out(t, sub, "rev-parse", "feat/search")
 	bs, err := p.Branches(ctx, "libs/feature")
 	if err != nil {
@@ -108,6 +111,112 @@ func TestSwitchNeverMovesAnExistingLocalBranch(t *testing.T) {
 	}
 	if head := out(t, sub, "rev-parse", "HEAD"); head != b.SHA {
 		t.Errorf("HEAD = %s, want %s", head, b.SHA)
+	}
+}
+
+func TestSwitchFastForwardsALocalBranchThatIsBehind(t *testing.T) {
+	p, root := ownFixture(t)
+	sub := filepath.Join(root, "super", "libs", "feature")
+	ctx := context.Background()
+
+	git(t, sub, "branch", "feat/search", "origin/feat/search~1") // behind only
+	bs, err := p.Branches(ctx, "libs/feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := findBranch(t, bs, "origin/feat/search")
+	got, err := p.Switch(ctx, "libs/feature", b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "feat/search" || out(t, sub, "branch", "--show-current") != "feat/search" {
+		t.Errorf("Switch = %q, branch = %q; want feat/search", got, out(t, sub, "branch", "--show-current"))
+	}
+	if tip := out(t, sub, "rev-parse", "feat/search"); tip != b.SHA {
+		t.Errorf("feat/search = %s, want fast-forwarded to %s", tip, b.SHA)
+	}
+	assertExact(t, sub)
+}
+
+func TestSwitchSuperprojectFastForwardsItsBranch(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	ctx := context.Background()
+
+	// main, checked out, is one behind origin/main: a pull --ff-only
+	tip := out(t, super, "rev-parse", "HEAD")
+	git(t, super, "update-ref", "refs/remotes/origin/main", tip)
+	git(t, super, "update-ref", "refs/heads/main", tip+"~1")
+	bs, err := p.Branches(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.Switch(ctx, "", findBranch(t, bs, "origin/main"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "main" || out(t, super, "branch", "--show-current") != "main" {
+		t.Errorf("Switch = %q, branch = %q; want main", got, out(t, super, "branch", "--show-current"))
+	}
+	if head := out(t, super, "rev-parse", "main"); head != tip {
+		t.Errorf("main = %s, want fast-forwarded to %s", head, tip)
+	}
+	assertExact(t, super)
+}
+
+func TestSwitchStaysOnTheCheckedOutBranchThatTracksIt(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	ctx := context.Background()
+
+	// dev, checked out, tracks origin/main and is one behind it
+	tip := out(t, super, "rev-parse", "HEAD")
+	git(t, super, "remote", "add", "origin", filepath.Join(root, "nowhere")) // never contacted
+	git(t, super, "update-ref", "refs/remotes/origin/main", tip)
+	git(t, super, "switch", "-q", "-c", "dev")
+	git(t, super, "update-ref", "refs/heads/dev", tip+"~1")
+	git(t, super, "branch", "-q", "--set-upstream-to=origin/main", "dev")
+	bs, err := p.Branches(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.Switch(ctx, "", findBranch(t, bs, "origin/main"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "dev" || out(t, super, "branch", "--show-current") != "dev" {
+		t.Errorf("Switch = %q, branch = %q; want dev", got, out(t, super, "branch", "--show-current"))
+	}
+	if head := out(t, super, "rev-parse", "dev"); head != tip {
+		t.Errorf("dev = %s, want fast-forwarded to %s", head, tip)
+	}
+	if main := out(t, super, "rev-parse", "main"); main != tip {
+		t.Errorf("main = %s, must not have moved from %s", main, tip)
+	}
+	assertExact(t, super)
+}
+
+func TestSwitchNeverMovesABranchOfAnotherWorktree(t *testing.T) {
+	p, root := ownFixture(t)
+	sub := filepath.Join(root, "super", "libs", "feature")
+	ctx := context.Background()
+
+	git(t, sub, "branch", "feat/search", "origin/feat/search~1")
+	git(t, sub, "worktree", "add", "-q", filepath.Join(root, "wt"), "feat/search")
+	before := out(t, sub, "rev-parse", "feat/search")
+	bs, err := p.Branches(ctx, "libs/feature")
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := p.Switch(ctx, "libs/feature", findBranch(t, bs, "origin/feat/search"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got != "" {
+		t.Errorf("Switch returned %q, want detached", got)
+	}
+	if after := out(t, sub, "rev-parse", "feat/search"); after != before {
+		t.Errorf("branch of the other worktree moved: %s -> %s", before, after)
 	}
 }
 

@@ -29,8 +29,9 @@ the questions you actually have:
   seconds. It never fetches on its own: the detail pane shows when a
   repository was last fetched, `f` fetches everything.
 - **Fix it from the same screen.** Restore a repository to exactly what git
-  records (`x`), or switch it to another branch (`b`). Both ask first if work
-  would be lost.
+  records (`x`), switch it to another branch (`b`), or move a pin that is
+  behind to the tip of its branch (`u`). They ask first if work would be
+  lost.
 - **Built for dozens to hundreds of submodules.** Each status loads
   asynchronously, so the UI never freezes.
 
@@ -133,10 +134,21 @@ the local and remote branches, newest first; type to filter.
 
 `↑` `↓` select, `enter` switches, `esc` cancels. The tip of the branch
 becomes the submodule's staged pin and it is restored to it, with HEAD on the
-branch. Picking `origin/feat` creates a local `feat` that tracks it; an
-existing local branch of that name is never moved. Like restore, it asks
+branch. Picking `origin/feat` creates a local `feat` that tracks it. Like restore, it asks
 first if work would be lost. The list is read from disk, so press `f` first
 to see new remote branches.
+
+An existing local branch that is only behind the remote branch is
+fast-forwarded; one with commits of its own is never moved.
+
+### Update a pin with `u`
+
+On a submodule whose pin is behind its branch (`origin/main ↓2`), `u` moves
+the pin to that branch's tip: the same as picking `origin/main` with `b`,
+without the popup. On the header it fast-forwards the superproject's branch
+to its upstream (`main ↓1`), like `git pull --ff-only`, and restores the
+submodules. It takes exactly the commits shown and fetches nothing; press
+`f` first to see newer ones.
 
 ### Fetch and reload
 
@@ -155,6 +167,7 @@ files.
 | `/` | Filter |
 | `!` | Problems only |
 | `c` | Copy path |
+| `u` | Update: move a pin that is behind to the tip of its branch (staged, like `b`); on the header, fast-forward the superproject |
 | `b` | Switch branch: pick a local or remote branch; its tip is staged and the repository restored to it |
 | `x` | Restore: make the worktree exactly what git records (asks if work would be lost) |
 | `f` / `r` | Fetch / reload |
@@ -167,8 +180,8 @@ click outside to close it.
 
 ## Status
 
-A prototype. Browsing is complete. Two write actions exist: restore (`x`)
-and switch branch (`b`). More (stage pin) are being specified in
+A prototype. Browsing is complete. Three write actions exist: restore (`x`),
+switch branch (`b`) and update pin (`u`), see
 [docs/actions.md](docs/actions.md).
 
 ## Documentation

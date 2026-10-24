@@ -28,13 +28,15 @@ type restoreState struct {
 	to         submodule.RestoreTarget
 	loss       submodule.Loss
 	branch     *submodule.Branch // set for a branch switch, which reuses this flow
+	pinUpdate  bool              // a switch to the pin's ref (u); branch is set by the check
 }
 
 // lossMsg is the result of the check before a restore.
 type lossMsg struct {
-	path string
-	loss submodule.Loss
-	err  error
+	path   string
+	loss   submodule.Loss
+	err    error
+	branch *submodule.Branch // the branch a pin update switches to
 }
 
 type restoreDoneMsg struct {
@@ -86,7 +88,7 @@ func (m Model) checkRestore() (tea.Model, tea.Cmd) {
 		} else {
 			loss, err = m.provider.(submodule.Restorer).RestoreLoss(ctx, path, to)
 		}
-		return lossMsg{path, loss, err}
+		return lossMsg{path: path, loss: loss, err: err}
 	}
 	return m, tea.Batch(check, m.tick())
 }
@@ -115,10 +117,17 @@ func (m Model) lossChecked(msg lossMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.err != nil {
+		verb := "check"
+		if m.restore.pinUpdate {
+			verb = "update"
+		}
 		m.restore = nil
-		m.notice = "can't check " + restoreName(m.byPath[msg.path]) + ": " + msg.err.Error()
+		m.notice = "can't " + verb + " " + restoreName(m.byPath[msg.path]) + ": " + msg.err.Error()
 		m.layout()
 		return m, nil
+	}
+	if msg.branch != nil {
+		m.restore.branch = msg.branch
 	}
 	m.restore.loss = msg.loss
 	if msg.loss.Empty() {
@@ -165,15 +174,15 @@ func (m Model) restoreDone(msg restoreDoneMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	switch {
 	case r != nil && r.branch != nil && msg.err != nil:
-		m.notice = "switch of " + r.name + " to " + r.branch.Name + " failed: " + msg.err.Error()
+		m.notice = r.noun() + " of " + r.name + " to " + r.branch.Name + " failed: " + msg.err.Error()
 	case r != nil && r.branch != nil:
 		to := r.branch.Name
 		if msg.branch != "" {
 			to = msg.branch
 		} else if r.branch.Remote {
-			to += " (detached: local " + r.branch.Local + " is elsewhere)"
+			to += " (detached: local " + r.branch.Local + " can't be fast-forwarded)"
 		}
-		cmds = append(cmds, m.footer.Flash("switched "+r.name+" to "+to))
+		cmds = append(cmds, m.footer.Flash(r.verbEd()+" "+r.name+" to "+to))
 	default:
 		name := "the superproject"
 		if r != nil {
@@ -202,20 +211,40 @@ func (r *restoreState) toText() string {
 	return ""
 }
 
-// verb and verbIng word the operation: a switch is shown like a restore, but
-// names its branch.
+// verb, verbIng, verbEd and noun word the operation: a switch and a pin
+// update are shown like a restore, but name their branch.
 func (r *restoreState) verb() string {
-	if r.branch != nil {
+	switch {
+	case r.pinUpdate:
+		return "Update"
+	case r.branch != nil:
 		return "Switch"
 	}
 	return "Restore"
 }
 
 func (r *restoreState) verbIng() string {
-	if r.branch != nil {
+	switch {
+	case r.pinUpdate:
+		return "updating"
+	case r.branch != nil:
 		return "switching"
 	}
 	return "restoring"
+}
+
+func (r *restoreState) verbEd() string {
+	if r.pinUpdate {
+		return "updated"
+	}
+	return "switched"
+}
+
+func (r *restoreState) noun() string {
+	if r.pinUpdate {
+		return "update"
+	}
+	return "switch"
 }
 
 func restoreName(s *submodule.Submodule) string {
