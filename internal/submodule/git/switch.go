@@ -107,7 +107,7 @@ func (p *Provider) Switch(ctx context.Context, path string, b submodule.Branch) 
 			return "", err
 		}
 	}
-	if err := p.restoreRepo(ctx, dir, b.SHA); err != nil {
+	if err := p.restoreRepo(ctx, dir, b.SHA, nil); err != nil { // HEAD goes on b below
 		return "", err
 	}
 

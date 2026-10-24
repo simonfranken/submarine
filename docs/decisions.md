@@ -327,7 +327,8 @@ the same for every submodule of the target tree, initializing missing ones.
 - *Ignored files stay* (`clean` without `-x`): `.env`, `node_modules` and
   IDE settings are not "additional files" worth deleting in every submodule.
 - *Branches never move.* A checkout that is not on the target is detached
-  first, so commits stay on their branch.
+  first, so commits stay on their branch. (A submodule is then put on a
+  branch at the target if there is one, see D28.)
 - *It asks only if something is lost* (changed or untracked files,
   operations in progress, commits on no ref, standalone repositories).
   Never asking would delete repositories that exist nowhere else; always
@@ -499,3 +500,33 @@ timeout, failures are silent), which supersedes the once-a-day rule of D21.
 N1 still holds: the TUI never waits for it. `q` changes meaning while an
 update is available, so muscle memory that exits with `q` now updates; the
 bar says so. Typing `q` in the filter or a popup is unchanged.
+
+## D28 — Restore puts a submodule on a branch at its pin
+
+**Context.** After a restore (for example after the superproject's branch
+changed) every submodule was a detached HEAD, so IDEs showed only hashes.
+**Decision.** Amends D23. After restoring a submodule, at any depth, a
+detached HEAD is put on a branch whose tip is the pin, in this order: (1) a
+local branch tracking the shown ref (or named like it), (2) the ref itself
+as a new local tracking branch, if no local branch has its name, (3) any
+other local branch, alphabetically, (4) any other remote branch whose name
+no local branch has, as a new tracking branch, the ref's remote first. A
+HEAD already on a branch stays there. If git refuses a branch (checked out
+in another worktree, a name conflict), the next one is tried; if none fits,
+HEAD stays detached and the restore still succeeds. Submodules that were in
+sync are included. The superproject is not affected.
+**Rationale.** Attaching a branch whose tip is the pin changes no commit and
+no file, so nothing can be lost and the loss question stays the same. The
+ref comes first because it is what the UI shows; a local branch beats a new
+one so restore adds as few branches as possible.
+**Alternatives.** Fast-forwarding a local branch that is behind its remote
+branch at the pin: rejected, restore still never moves a branch. Staying
+detached when several branches fit: rejected, the order above always gives
+one answer, the same on every run.
+**Consequences.** Restore now may create local branches (only for remote
+branches at the pin whose name has none). Per detached submodule it costs a
+`symbolic-ref` and one `for-each-ref --points-at`; only if a branch is at
+the pin, the ref is resolved (as for `Status`) and one `switch` runs. No
+network. `detached HEAD on pin` is now left only where no branch is at the
+pin. Switch keeps its own rule for the repository it switches; the
+submodules below it follow this one.

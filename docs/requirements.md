@@ -145,7 +145,8 @@ commit hashes. It doesn't answer the questions users actually have:
   the header is selected): its worktree becomes exactly what git records, and
   so do all submodules below it, recursively. Staged pins are kept at every
   depth. For a submodule with a staged pin it asks whether to restore to the
-  staged or the committed pin (the latter unstages it). It asks for
+  staged or the committed pin (the latter unstages it). A restored submodule
+  whose pin is a branch tip ends on that branch, not detached. It asks for
   confirmation only if something would be lost. See [actions.md](actions.md#restore).
 
 - **F57** `b` opens a popup in the middle of the screen with a search line

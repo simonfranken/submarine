@@ -332,3 +332,130 @@ func TestRestoreLossCountsStagedPinsOfAMovingRepository(t *testing.T) {
 		t.Errorf("loss %+v, want 1 staged pin and the 2 detached nested commits", l)
 	}
 }
+
+// restoreSub restores the submodule path and returns the branch its HEAD is
+// on ("" if detached).
+func restoreSub(t *testing.T, p *Provider, super, path string) string {
+	t.Helper()
+	if err := p.Restore(context.Background(), path, submodule.RestoreStaged); err != nil {
+		t.Fatal(err)
+	}
+	return out(t, filepath.Join(super, filepath.FromSlash(path)), "branch", "--show-current")
+}
+
+func TestRestoreAttachesTheLocalBranchTrackingTheRef(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	// src/ui: in sync, the pin is behind origin/main, local main is at the pin
+	git(t, filepath.Join(super, "src", "ui"), "checkout", "-q", "--detach")
+	git(t, filepath.Join(super, "src", "ui"), "branch", "aaa") // alphabetically first, but no ref
+
+	if got := restoreSub(t, p, super, "src/ui"); got != "main" {
+		t.Errorf("branch = %q, want main", got)
+	}
+}
+
+func TestRestoreCreatesTheRefBranchBeforeOtherBranches(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	log := filepath.Join(super, "libs", "log")
+	// libs/log: the pin is the tip of origin/main and origin/archive
+	git(t, log, "checkout", "-q", "--detach")
+	git(t, log, "branch", "-D", "main")
+
+	if got := restoreSub(t, p, super, "libs/log"); got != "main" {
+		t.Errorf("branch = %q, want main", got)
+	}
+	if up := out(t, log, "rev-parse", "--abbrev-ref", "main@{upstream}"); up != "origin/main" {
+		t.Errorf("upstream = %q, want origin/main", up)
+	}
+	if out(t, log, "branch", "--list", "archive") != "" {
+		t.Error("archive must not be created")
+	}
+}
+
+func TestRestoreCreatesARemoteFeatureBranch(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	topic := filepath.Join(super, "libs", "topic")
+	mainTip := out(t, topic, "rev-parse", "main")
+	// libs/topic: detached at the tip of origin/feat/search, local main elsewhere
+
+	if got := restoreSub(t, p, super, "libs/topic"); got != "feat/search" {
+		t.Errorf("branch = %q, want feat/search", got)
+	}
+	if got := out(t, topic, "rev-parse", "main"); got != mainTip {
+		t.Errorf("main moved: %s -> %s", mainTip, got)
+	}
+}
+
+func TestRestorePrefersLocalBranchesAlphabetically(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	feature := filepath.Join(super, "libs", "feature")
+	// libs/feature: the pin is on no branch tip
+	git(t, feature, "branch", "zz")
+	git(t, feature, "branch", "aa")
+
+	if got := restoreSub(t, p, super, "libs/feature"); got != "aa" {
+		t.Errorf("branch = %q, want aa", got)
+	}
+}
+
+func TestRestoreNeverMovesALocalBranchToAttach(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	topic := filepath.Join(super, "libs", "topic")
+	git(t, topic, "branch", "feat/search", "origin/main") // same name, elsewhere
+	before := out(t, topic, "rev-parse", "feat/search")
+
+	if got := restoreSub(t, p, super, "libs/topic"); got != "" {
+		t.Errorf("branch = %q, want detached", got)
+	}
+	if after := out(t, topic, "rev-parse", "feat/search"); after != before {
+		t.Errorf("feat/search moved: %s -> %s", before, after)
+	}
+}
+
+func TestRestoreKeepsTheCheckedOutBranch(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	log := filepath.Join(super, "libs", "log")
+	git(t, log, "switch", "-q", "-c", "zz") // at the pin, like main
+
+	if got := restoreSub(t, p, super, "libs/log"); got != "zz" {
+		t.Errorf("branch = %q, want zz kept", got)
+	}
+}
+
+func TestRestoreSkipsABranchOfAnotherWorktree(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	log := filepath.Join(super, "libs", "log")
+	git(t, log, "checkout", "-q", "--detach")
+	git(t, log, "worktree", "add", "-q", filepath.Join(root, "wt"), "main")
+
+	if got := restoreSub(t, p, super, "libs/log"); got == "main" {
+		t.Error("main is checked out in another worktree")
+	}
+}
+
+func TestRestoreSuperprojectAttachesNestedSubmodules(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	nested := filepath.Join(super, "libs", "log", "modules", "nested")
+	git(t, nested, "checkout", "-q", "--detach")
+
+	if err := p.Restore(context.Background(), "", submodule.RestoreStaged); err != nil {
+		t.Fatal(err)
+	}
+	if got := out(t, nested, "branch", "--show-current"); got != "main" {
+		t.Errorf("nested branch = %q, want main", got)
+	}
+	if got := out(t, filepath.Join(super, "libs", "topic"), "branch", "--show-current"); got != "feat/search" {
+		t.Errorf("libs/topic branch = %q, want feat/search", got)
+	}
+	if got := out(t, super, "branch", "--show-current"); got != "main" {
+		t.Errorf("superproject branch = %q, want main", got)
+	}
+}

@@ -86,7 +86,8 @@ After a successful restore of repository R with target T:
    any depth.
 
 So the subtree shows `in sync` everywhere, except for states restore does
-not change: `unpushed`, behind/ahead of the ref, and `detached HEAD on pin`.
+not change: `unpushed`, behind/ahead of the ref, and `detached HEAD on pin`
+where no branch is at the pin (see [Branches](#branches)).
 
 The recursion follows **T**, not the tree loaded in the UI. A submodule that
 is only in T (for example, after switching branches) is initialized. A
@@ -100,8 +101,25 @@ submodule that is only on disk is deleted as an untracked directory.
   the branch stays checked out.
 - **Submodule off the pin:** HEAD is detached at the target. The branch that
   was checked out is **not moved**, so its commits stay on it.
+- **Submodule detached at the target** (after the step above, or because it
+  was already so, also when it was in sync): HEAD is put on a branch whose
+  tip is the target, the first that fits of ([D28](decisions.md)):
+  1. a local branch tracking the ref the UI shows (or named like it), e.g.
+     local `main` tracking `origin/main`, also when the pin is behind or
+     ahead of the ref;
+  2. the ref itself, if its tip is the target and no local branch has its
+     name: the local branch is created, tracking it;
+  3. any other local branch, the first alphabetically;
+  4. any other remote branch whose name no local branch has, created as a
+     tracking branch; the ref's remote first, then alphabetically.
 
-Restore never moves, creates or deletes a branch.
+  If git refuses one (checked out in another worktree, a name conflict),
+  the next is tried. If none fits, HEAD stays detached.
+
+Restore never moves or deletes a branch. A local branch that is behind or
+ahead of its remote branch is no candidate and is not fast-forwarded. The
+only branches restore creates are tracking branches for remote branches at
+the target, in steps 2 and 4.
 
 ### What can be lost
 
@@ -187,6 +205,14 @@ submodule update --init --checkout --force -- <not yet initialized children>
 `--checkout` overrides `submodule.<name>.update`, and the explicit paths
 override `submodule.<name>.active`, so no child module is skipped.
 
+For a submodule, after `submodule sync`, `attachBranch` puts a detached HEAD
+on a branch: `symbolic-ref -q HEAD` (on a branch: done), `for-each-ref
+--points-at=T refs/heads refs/remotes` (no branch at T: done), then the ref
+is resolved like `Status` does, and the first candidate (see
+[Branches](#branches)) that `switch` / `switch -c <local> --track <remote>`
+accepts wins. The branch checked out before the restore is passed to the
+ref resolution. A child's `.gitmodules` branch is read once per parent.
+
 With `c` the parent's index gets the committed pin first (`update-index
 --cacheinfo` in the parent).
 
@@ -261,7 +287,9 @@ restore or switch runs at a time.
 
 `git.Provider.Switch` (`internal/submodule/git/switch.go`): verify the ref is
 still `T`; `update-index --cacheinfo` in the parent; `restoreRepo` (see
-restore); then `switch` / `switch -c <local> --track <remote-branch>`.
+restore); then `switch` / `switch -c <local> --track <remote-branch>`. The restore leaves HEAD of the
+switched repository alone (Switch puts it on the chosen branch); the
+submodules below it are attached as in a restore.
 `SwitchLoss` is `lossOf` with `T` as the target. `Branches` is one
 `for-each-ref`, without the `origin/HEAD` symref.
 
@@ -337,7 +365,12 @@ action, hence `x`.
   not moved, ignored files survive, a merge and a rebase in progress end, a
   standalone clone and a removed submodule's directory are deleted, a missing
   submodule is cloned again, `update = none` and inactive submodules are
-  restored, an unavailable commit is reported. The loss is empty for off pin,
+  restored, an unavailable commit is reported. A detached submodule ends on
+  the local branch tracking the ref, else on the ref created as a tracking
+  branch (before other branches at the pin), else on the first local
+  branch; a local branch elsewhere is not moved; a checked-out branch stays;
+  a branch of another worktree is skipped; nested submodules are attached
+  too. The loss is empty for off pin,
   missing and unpushed submodules, counts files, nested changes, merges,
   detached commits (not those on a branch) and standalone repositories.
 - UI (`internal/tui/restore_test.go`): restores at once without a loss, asks

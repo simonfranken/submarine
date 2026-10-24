@@ -327,16 +327,9 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 		return fmt.Errorf("pinned commit %.7s not fetched", pin)
 	}
 
-	// remote branches containing the pin, oldest tip first
-	out, err := run(ctx, in.dir, "for-each-ref", "--contains", pin, "--sort=committerdate", "--format=%(refname)", "refs/remotes")
+	containing, err := remoteContaining(ctx, in.dir, pin)
 	if err != nil {
 		return err
-	}
-	var containing []string
-	for _, r := range strings.Fields(out) {
-		if !strings.HasSuffix(r, "/HEAD") {
-			containing = append(containing, strings.TrimPrefix(r, "refs/remotes/"))
-		}
 	}
 	st.Pin.Pushed = len(containing) > 0
 
@@ -359,6 +352,7 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 		return err
 	}
 	st.CheckedOut = st.Pinned
+	var out string
 	if head != pin {
 		if st.CheckedOut, err = commit(ctx, in.dir, head); err != nil {
 			return err
@@ -415,6 +409,22 @@ func pinState(ctx context.Context, in info, st *submodule.Status, pin, head, bra
 		}
 	}
 	return nil
+}
+
+// remoteContaining lists the remote branches containing pin, oldest tip
+// first, without the origin/HEAD symref.
+func remoteContaining(ctx context.Context, dir, pin string) ([]string, error) {
+	out, err := run(ctx, dir, "for-each-ref", "--contains", pin, "--sort=committerdate", "--format=%(refname)", "refs/remotes")
+	if err != nil {
+		return nil, err
+	}
+	var containing []string
+	for _, r := range strings.Fields(out) {
+		if !strings.HasSuffix(r, "/HEAD") {
+			containing = append(containing, strings.TrimPrefix(r, "refs/remotes/"))
+		}
+	}
+	return containing, nil
 }
 
 // resolve finds the ref the pin is compared with, following the order in

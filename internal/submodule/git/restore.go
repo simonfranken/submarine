@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -45,7 +47,7 @@ func (p *Provider) RestoreLoss(ctx context.Context, path string, to submodule.Re
 // submodule is cloned and missing commits are fetched; git never prompts.
 func (p *Provider) Restore(ctx context.Context, path string, to submodule.RestoreTarget) error {
 	if path == "" {
-		return p.restoreRepo(ctx, p.root, "HEAD")
+		return p.restoreRepo(ctx, p.root, "HEAD", nil)
 	}
 	p.mu.RLock()
 	in, ok := p.mods[path]
@@ -67,7 +69,7 @@ func (p *Provider) Restore(ctx context.Context, path string, to submodule.Restor
 			return fmt.Errorf("%s: %w", path, err)
 		}
 	}
-	return p.restoreRepo(ctx, in.dir, pin)
+	return p.restoreRepo(ctx, in.dir, pin, &in)
 }
 
 // restoreTarget returns the directory and the commit path is restored to:
@@ -123,7 +125,9 @@ func pinOf(ctx context.Context, in info, to submodule.RestoreTarget) (string, er
 // or "HEAD") and then every submodule its index records. Branches are never
 // moved: a checkout that is not on target is detached first. If the checkout
 // stays on target, its staged pins are kept and are the submodules' targets.
-func (p *Provider) restoreRepo(ctx context.Context, dir, target string) error {
+// For a submodule (in is not nil) a detached HEAD is then put on a branch at
+// target if there is one, see attachBranch; the submodules below always are.
+func (p *Provider) restoreRepo(ctx context.Context, dir, target string, in *info) error {
 	env := p.networkEnv()
 	g := func(args ...string) (string, error) {
 		return p.exec(ctx, dir, env, append(append([]string{}, restoreArgs...), args...)...)
@@ -138,6 +142,7 @@ func (p *Provider) restoreRepo(ctx context.Context, dir, target string) error {
 	if gitDir, _, err := gitDirs(dir); err == nil {
 		p.clearOperations(ctx, dir, gitDir)
 	}
+	prev, _, _ := try(ctx, dir, "symbolic-ref", "--short", "-q", "HEAD") // for the ref, see attachBranch
 	var keep []gitlink
 	if head, err := g("rev-parse", "--verify", "-q", "HEAD"); err != nil || head != sha {
 		if _, err := g("checkout", "--force", "--detach", sha); err != nil {
@@ -161,6 +166,11 @@ func (p *Provider) restoreRepo(ctx context.Context, dir, target string) error {
 	if _, err := g("submodule", "sync", "-q"); err != nil {
 		return err
 	}
+	if in != nil {
+		if err := p.attachBranch(ctx, *in, sha, prev); err != nil {
+			return err
+		}
+	}
 
 	links, err := indexGitlinks(ctx, dir)
 	if err != nil {
@@ -178,6 +188,16 @@ func (p *Provider) restoreRepo(ctx context.Context, dir, target string) error {
 		}
 	}
 
+	// the .gitmodules branch of each child, for its ref
+	branches := map[string]string{}
+	if out, ok, err := try(ctx, dir, "config", "-f", ".gitmodules", "--get-regexp", `^submodule\..*\.(path|branch)$`); err != nil {
+		return err
+	} else if ok {
+		for _, m := range parseGitmodules(out) {
+			branches[path.Clean(m.path)] = m.branch
+		}
+	}
+
 	// the children are independent repositories
 	var wg sync.WaitGroup
 	errs := make([]error, len(links))
@@ -185,13 +205,143 @@ func (p *Provider) restoreRepo(ctx context.Context, dir, target string) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			if err := p.restoreRepo(ctx, filepath.Join(dir, filepath.FromSlash(l.path)), l.sha); err != nil {
+			child := info{superDir: dir, dir: filepath.Join(dir, filepath.FromSlash(l.path)), relPath: l.path, branch: branches[l.path]}
+			if err := p.restoreRepo(ctx, child.dir, l.sha, &child); err != nil {
 				errs[i] = err
 			}
 		}()
 	}
 	wg.Wait()
 	return errors.Join(errs...)
+}
+
+// attachBranch puts the detached HEAD of the restored submodule in on a
+// branch whose tip is sha, the first that git accepts of, in this order:
+//
+//  1. a local branch tracking the ref the UI shows (see resolve), or named
+//     like it;
+//  2. the ref itself, as a new local branch tracking it, if no local branch
+//     has its name;
+//  3. any other local branch, alphabetically;
+//  4. any other remote branch whose name no local branch has, as a new
+//     tracking branch; the ref's remote first, then alphabetically.
+//
+// A HEAD that is on a branch stays there. No branch is moved: a local branch
+// elsewhere is no candidate, and its remote branch neither. If nothing fits,
+// HEAD stays detached; only a context error is returned. prev is the branch
+// checked out before the restore; the ref depends on it.
+func (p *Provider) attachBranch(ctx context.Context, in info, sha, prev string) error {
+	if _, onBranch, err := try(ctx, in.dir, "symbolic-ref", "-q", "HEAD"); err != nil || onBranch {
+		return err
+	}
+	out, ok, err := try(ctx, in.dir, "for-each-ref", "--points-at="+sha,
+		"--format=%(refname)%00%(upstream)%00%(symref)", "refs/heads", "refs/remotes")
+	if err != nil || !ok {
+		return err
+	}
+	var locals, remotes []string // alphabetical, as for-each-ref sorts them
+	upstreams := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Split(line, "\x00")
+		if len(f) != 3 || f[2] != "" { // a symref is origin/HEAD
+			continue
+		}
+		if name, ok := strings.CutPrefix(f[0], "refs/heads/"); ok {
+			locals = append(locals, name)
+			upstreams[name] = strings.TrimPrefix(f[1], "refs/remotes/")
+		} else if name, ok := strings.CutPrefix(f[0], "refs/remotes/"); ok {
+			remotes = append(remotes, name)
+		}
+	}
+	if len(locals)+len(remotes) == 0 {
+		return nil
+	}
+
+	// the ref, if it is a remote branch
+	var ref string
+	containing, err := remoteContaining(ctx, in.dir, sha)
+	if err != nil {
+		return err
+	}
+	if r, source, _, err := resolve(ctx, in, sha, prev, containing); err != nil {
+		return err
+	} else if source != submodule.RefFromTag && source != submodule.RefFromSHA {
+		ref = r
+	}
+
+	localOf := func(remote string) string { _, l, _ := strings.Cut(remote, "/"); return l }
+	hasLocal := func(name string) (bool, error) {
+		_, ok, err := try(ctx, in.dir, "rev-parse", "--verify", "-q", "refs/heads/"+name)
+		return ok, err
+	}
+	type candidate struct{ local, remote string } // remote: create local, tracking it
+	var cands []candidate
+	addRemote := func(r string) error {
+		l := localOf(r)
+		if l == "" {
+			return nil
+		}
+		exists, err := hasLocal(l)
+		if err == nil && !exists {
+			cands = append(cands, candidate{l, r})
+		}
+		return err
+	}
+	if ref != "" {
+		for _, l := range locals {
+			if upstreams[l] == ref {
+				cands = append(cands, candidate{local: l})
+			}
+		}
+		if l := localOf(ref); slices.Contains(locals, l) {
+			cands = append(cands, candidate{local: l})
+		}
+		if slices.Contains(remotes, ref) {
+			if err := addRemote(ref); err != nil {
+				return err
+			}
+		}
+	}
+	for _, l := range locals {
+		cands = append(cands, candidate{local: l})
+	}
+	preferred, _, _ := strings.Cut(ref, "/")
+	if preferred == "" {
+		if preferred, err = remoteName(ctx, in.dir); err != nil {
+			return err
+		}
+	}
+	slices.SortStableFunc(remotes, func(a, b string) int {
+		ap, bp := strings.HasPrefix(a, preferred+"/"), strings.HasPrefix(b, preferred+"/")
+		switch {
+		case ap && !bp:
+			return -1
+		case bp && !ap:
+			return 1
+		}
+		return 0
+	})
+	for _, r := range remotes {
+		if r != ref {
+			if err := addRemote(r); err != nil {
+				return err
+			}
+		}
+	}
+
+	for _, c := range cands {
+		args := append(append([]string{}, restoreArgs...), "switch", "-q", c.local)
+		if c.remote != "" {
+			args = append(append([]string{}, restoreArgs...), "switch", "-q", "-c", c.local, "--track", c.remote)
+		}
+		if _, err := p.exec(ctx, in.dir, nil, args...); err == nil {
+			return nil
+		} else if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// e.g. checked out in another worktree: try the next one
+	}
+	return nil
 }
 
 // networkEnv is the environment of commands that may clone or fetch.
