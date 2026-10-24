@@ -85,7 +85,7 @@ func (p *Provider) SwitchLoss(ctx context.Context, path string, b submodule.Bran
 	if err != nil {
 		return submodule.Loss{}, err
 	}
-	return p.lossOf(ctx, dir, b.SHA), nil
+	return p.lossOf(ctx, dir, b.SHA, true), nil
 }
 
 // Switch makes b's tip the staged pin of a submodule, restores the repository
@@ -114,7 +114,7 @@ func (p *Provider) Switch(ctx context.Context, path string, b submodule.Branch) 
 			return "", err
 		}
 	}
-	if err := p.restoreRepo(ctx, dir, b.SHA, nil); err != nil { // HEAD goes on b below
+	if err := p.restoreRepo(ctx, dir, b.SHA, nil, true); err != nil { // HEAD goes on b below
 		return "", err
 	}
 

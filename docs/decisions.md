@@ -567,3 +567,29 @@ the branch.
 its own rule. No new provider interface: `u` is `Branches`, `SwitchLoss` and
 `Switch`. Since `Status.Tip.SHA` is abbreviated, the UI compares it as a
 prefix of the branch's full SHA.
+
+## D30 — Hard restore drops staged pins at every depth
+
+**Context.** `x` keeps staged pins at every depth (D23), except in a
+repository the restore moves. Its `c` answer unstages only the selected
+submodule's pin. Staged pins of the superproject, or of nested repositories
+that stay on their pin, could only be dropped one by one.
+**Decision.** Amends D23. `X` is a hard restore: the selected submodule goes
+to its committed pin without the `s` / `c` question, and every restored
+repository's index is reset to `HEAD` (the superproject's too), so all
+staged pins below are dropped and the submodules follow the committed
+trees. Dropped staged pins are counted in the loss and listed if the
+question appears, but alone they don't make it appear. `x` and its question
+stay as they are.
+**Rationale.** A separate key keeps the common `x` free of a further
+question and makes the stronger action deliberate. A staged pin is only a
+recorded SHA; its commit stays in the submodule, and if HEAD leaves a
+commit no ref reaches, `commits on no branch` still asks.
+**Alternatives.** A third answer in the `s` / `c` question: only reachable
+for a submodule with a staged pin itself, not for the superproject or a
+clean parent. Dropping the question from `x`: rejected, the choice between
+staged and committed pin is still useful there.
+**Consequences.** `RestoreTarget` gets `RestoreHard`, which also matters for
+the superproject. `restoreRepo` and `lossOf` take whether to keep staged
+pins; switch always keeps them. Without a committed pin (an added
+submodule), `X` uses the index pin.

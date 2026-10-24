@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"os"
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -185,5 +186,49 @@ func TestRestoreOfAStagedPinAsksWhichPin(t *testing.T) {
 	feed(m, next)
 	if len(f.to) != 1 || f.to[0] != submodule.RestoreCommitted || f.restored[0] != staged.Path {
 		t.Fatalf("restored %q to %v, want %s to the committed pin", f.restored, f.to, staged.Path)
+	}
+}
+
+func TestHardRestoreOfAStagedPinDoesNotAsk(t *testing.T) {
+	m, f := newRestoreModel(t, submodule.Loss{StagedPins: 2, Modules: 2})
+	mm := m.(Model)
+	var staged *submodule.Submodule
+	submodule.Walk(mm.repo.Submodules, func(s *submodule.Submodule) {
+		if staged == nil && s.Children == nil {
+			staged = s
+		}
+	})
+	staged.Status = &submodule.Status{PinStaged: true, Pin: submodule.PinInfo{Pushed: true}}
+	mm.tree.Select(staged.Path)
+	m = mm
+
+	// neither which pin, nor y/n for staged pins alone
+	m, cmd := press(m, "X")
+	var next tea.Cmd
+	for _, msg := range run(cmd) {
+		if l, ok := msg.(lossMsg); ok {
+			m, next = m.Update(l)
+		}
+	}
+	feed(m, next)
+	if len(f.to) != 1 || f.to[0] != submodule.RestoreHard || f.restored[0] != staged.Path {
+		t.Fatalf("restored %q to %v, want %s hard", f.restored, f.to, staged.Path)
+	}
+}
+
+func TestHardRestoreAsksWhenWorkIsLost(t *testing.T) {
+	m, _ := newRestoreModel(t, submodule.Loss{Files: 1, StagedPins: 1, Modules: 1})
+	m, cmd := press(m, "X")
+	for _, msg := range run(cmd) {
+		if l, ok := msg.(lossMsg); ok {
+			m, _ = m.Update(l)
+		}
+	}
+	r := m.(Model).restore
+	if r == nil || r.phase != restoreAsking {
+		t.Fatalf("want a question, got %+v", r)
+	}
+	if got := lossText(r.loss); !strings.Contains(got, "1 staged pin") {
+		t.Errorf("question %q doesn't list the staged pin", got)
 	}
 }

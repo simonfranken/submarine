@@ -47,8 +47,9 @@ type restoreDoneMsg struct {
 
 // startRestore checks what restoring the selection would discard. If nothing
 // would be lost it restores at once, else it asks first. A submodule with a
-// staged pin first asks which pin to restore to.
-func (m Model) startRestore() (tea.Model, tea.Cmd) {
+// staged pin first asks which pin to restore to; a hard restore doesn't: it
+// goes to the committed pins, at every depth.
+func (m Model) startRestore(hard bool) (tea.Model, tea.Cmd) {
 	s := m.tree.Selected()
 	_, ok := m.provider.(submodule.Restorer)
 	var flash string
@@ -67,6 +68,10 @@ func (m Model) startRestore() (tea.Model, tea.Cmd) {
 	}
 
 	m.restore = &restoreState{path: s.Path, name: restoreName(s)}
+	if hard {
+		m.restore.to = submodule.RestoreHard
+		return m.checkRestore()
+	}
 	if !s.IsRoot() && s.Status != nil && s.Status.PinStaged {
 		m.restore.phase = restoreChoosing
 		m.layout()
@@ -130,7 +135,13 @@ func (m Model) lossChecked(msg lossMsg) (tea.Model, tea.Cmd) {
 		m.restore.branch = msg.branch
 	}
 	m.restore.loss = msg.loss
-	if msg.loss.Empty() {
+	// a hard restore is asked for to drop staged pins: alone they are no
+	// reason to ask, but are listed if something else is lost
+	lost := msg.loss
+	if m.restore.to == submodule.RestoreHard {
+		lost.StagedPins, lost.Modules = 0, 0
+	}
+	if lost.Empty() {
 		return m.runRestore()
 	}
 	m.restore.phase = restoreAsking
@@ -199,13 +210,16 @@ func (m Model) restoreDone(msg restoreDoneMsg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// toText is " to origin/feat" for a switch, " to the committed pin" if that was chosen; the staged pin is the
-// usual target and needs no words.
+// toText is " to origin/feat" for a switch, " to the committed pin" if that
+// was chosen, " to the committed pins" for a hard restore; the staged pin is
+// the usual target and needs no words.
 func (r *restoreState) toText() string {
-	if r.branch != nil {
+	switch {
+	case r.branch != nil:
 		return " to " + r.branch.Name
-	}
-	if r.to == submodule.RestoreCommitted {
+	case r.to == submodule.RestoreHard:
+		return " to the committed pins"
+	case r.to == submodule.RestoreCommitted:
 		return " to the committed pin"
 	}
 	return ""

@@ -148,6 +148,10 @@ commit hashes. It doesn't answer the questions users actually have:
   staged or the committed pin (the latter unstages it). A restored submodule
   whose pin is a branch tip ends on that branch, not detached. It asks for
   confirmation only if something would be lost. See [actions.md](actions.md#restore).
+  `X` is a hard restore: it goes to the committed pins at every depth,
+  without the pin question, and drops all staged pins below the selection
+  too. Dropped staged pins alone don't make it ask. See
+  [actions.md](actions.md#hard-restore).
 
 - **F57** `b` opens a popup in the middle of the screen with a search line
   and the local and remote branches of the selection (a submodule, or the

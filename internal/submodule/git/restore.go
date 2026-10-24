@@ -38,16 +38,17 @@ func (p *Provider) RestoreLoss(ctx context.Context, path string, to submodule.Re
 	if dir == "" { // not initialized: nothing on disk to lose
 		return submodule.Loss{}, nil
 	}
-	return p.lossOf(ctx, dir, target), nil
+	return p.lossOf(ctx, dir, target, to.KeepsStaged()), nil
 }
 
 // Restore makes path ("" is the superproject) and all submodules below it
 // exactly what git records, see docs/actions.md. Staged pins are kept. With
-// RestoreCommitted, a submodule's own staged pin is unstaged first. A missing
-// submodule is cloned and missing commits are fetched; git never prompts.
+// RestoreCommitted, a submodule's own staged pin is unstaged first; with
+// RestoreHard, the staged pins below are dropped too. A missing submodule is
+// cloned and missing commits are fetched; git never prompts.
 func (p *Provider) Restore(ctx context.Context, path string, to submodule.RestoreTarget) error {
 	if path == "" {
-		return p.restoreRepo(ctx, p.root, "HEAD", nil)
+		return p.restoreRepo(ctx, p.root, "HEAD", nil, to.KeepsStaged())
 	}
 	p.mu.RLock()
 	in, ok := p.mods[path]
@@ -59,7 +60,7 @@ func (p *Provider) Restore(ctx context.Context, path string, to submodule.Restor
 	if err != nil {
 		return err
 	}
-	if to == submodule.RestoreCommitted {
+	if to.Committed() {
 		if _, err := p.exec(ctx, in.superDir, nil, "update-index", "--cacheinfo", "160000,"+pin+","+in.relPath); err != nil {
 			return err
 		}
@@ -69,7 +70,7 @@ func (p *Provider) Restore(ctx context.Context, path string, to submodule.Restor
 			return fmt.Errorf("%s: %w", path, err)
 		}
 	}
-	return p.restoreRepo(ctx, in.dir, pin, &in)
+	return p.restoreRepo(ctx, in.dir, pin, &in, to.KeepsStaged())
 }
 
 // restoreTarget returns the directory and the commit path is restored to:
@@ -96,9 +97,10 @@ func (p *Provider) restoreTarget(ctx context.Context, path string, to submodule.
 }
 
 // pinOf returns the gitlink of a submodule in its parent's index (staged)
-// or HEAD (committed).
+// or HEAD (committed). A hard restore of a submodule that was added but not
+// committed yet uses the index: there is no staged pin to drop.
 func pinOf(ctx context.Context, in info, to submodule.RestoreTarget) (string, error) {
-	if to == submodule.RestoreCommitted {
+	if to.Committed() {
 		out, _, err := try(ctx, in.superDir, "ls-tree", "HEAD", "--", in.relPath)
 		if err != nil {
 			return "", err
@@ -106,7 +108,9 @@ func pinOf(ctx context.Context, in info, to submodule.RestoreTarget) (string, er
 		if pin := parseGitlink(out); pin != "" {
 			return pin, nil
 		}
-		return "", errors.New("has no committed pin (added, but not committed yet)")
+		if to != submodule.RestoreHard {
+			return "", errors.New("has no committed pin (added, but not committed yet)")
+		}
 	}
 	out, err := run(ctx, in.superDir, "ls-files", "-s", "--", in.relPath)
 	if err != nil {
@@ -124,10 +128,11 @@ func pinOf(ctx context.Context, in info, to submodule.RestoreTarget) (string, er
 // restoreRepo restores the initialized repository at dir to target (a commit
 // or "HEAD") and then every submodule its index records. Branches are never
 // moved: a checkout that is not on target is detached first. If the checkout
-// stays on target, its staged pins are kept and are the submodules' targets.
+// stays on target and keep is set, its staged pins are kept and are the
+// submodules' targets; else the submodules follow target's tree.
 // For a submodule (in is not nil) a detached HEAD is then put on a branch at
 // target if there is one, see attachBranch; the submodules below always are.
-func (p *Provider) restoreRepo(ctx context.Context, dir, target string, in *info) error {
+func (p *Provider) restoreRepo(ctx context.Context, dir, target string, in *info, keep bool) error {
 	env := p.networkEnv()
 	g := func(args ...string) (string, error) {
 		return p.exec(ctx, dir, env, append(append([]string{}, restoreArgs...), args...)...)
@@ -143,18 +148,20 @@ func (p *Provider) restoreRepo(ctx context.Context, dir, target string, in *info
 		p.clearOperations(ctx, dir, gitDir)
 	}
 	prev, _, _ := try(ctx, dir, "symbolic-ref", "--short", "-q", "HEAD") // for the ref, see attachBranch
-	var keep []gitlink
+	var kept []gitlink
 	if head, err := g("rev-parse", "--verify", "-q", "HEAD"); err != nil || head != sha {
 		if _, err := g("checkout", "--force", "--detach", sha); err != nil {
 			return err
 		}
-	} else if keep, err = stagedPins(ctx, dir); err != nil {
-		return err
+	} else if keep {
+		if kept, err = stagedPins(ctx, dir); err != nil {
+			return err
+		}
 	}
 	if _, err := g("reset", "--hard", "-q"); err != nil {
 		return err
 	}
-	for _, l := range keep {
+	for _, l := range kept {
 		if _, err := g("update-index", "--cacheinfo", "160000,"+l.sha+","+l.path); err != nil {
 			return err
 		}
@@ -206,7 +213,7 @@ func (p *Provider) restoreRepo(ctx context.Context, dir, target string, in *info
 		go func() {
 			defer wg.Done()
 			child := info{superDir: dir, dir: filepath.Join(dir, filepath.FromSlash(l.path)), relPath: l.path, branch: branches[l.path]}
-			if err := p.restoreRepo(ctx, child.dir, l.sha, &child); err != nil {
+			if err := p.restoreRepo(ctx, child.dir, l.sha, &child, keep); err != nil {
 				errs[i] = err
 			}
 		}()
@@ -482,8 +489,9 @@ func stagedPins(ctx context.Context, dir string) ([]gitlink, error) {
 
 // lossOf adds up what a restore of the repository at dir to target
 // discards, including the submodules on disk below it. target is "" if it is
-// not known; then commits are only judged by the refs that reach them.
-func (p *Provider) lossOf(ctx context.Context, dir, target string) submodule.Loss {
+// not known; then commits are only judged by the refs that reach them. keep
+// is false for a hard restore, which drops all staged pins.
+func (p *Provider) lossOf(ctx context.Context, dir, target string, keep bool) submodule.Loss {
 	var own submodule.Loss
 	var children []gitlink
 	var targets map[string]string
@@ -545,16 +553,19 @@ func (p *Provider) lossOf(ctx context.Context, dir, target string) submodule.Los
 			}
 
 			// staged pins are kept, unless the checkout moves away from
-			// the commit they were staged on; then the submodules follow
-			// the target's tree
+			// the commit they were staged on or the restore is hard; then
+			// the submodules follow the target's tree
 			staged, err := stagedPins(ctx, dir)
 			if err != nil {
 				unknown()
 			}
 			var links []gitlink
 			switch {
-			case !moves:
+			case !moves && keep:
 				links, err = indexGitlinks(ctx, dir)
+			case !moves:
+				own.StagedPins = len(staged)
+				links, err = treeGitlinks(ctx, dir, "HEAD")
 			case target != "":
 				own.StagedPins = len(staged)
 				links, err = treeGitlinks(ctx, dir, target)
@@ -589,7 +600,7 @@ func (p *Provider) lossOf(ctx context.Context, dir, target string) submodule.Los
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			results[i] = p.lossOf(ctx, sub, targets[c.path])
+			results[i] = p.lossOf(ctx, sub, targets[c.path], keep)
 		}()
 	}
 	wg.Wait()

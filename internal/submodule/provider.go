@@ -72,14 +72,23 @@ type Switcher interface {
 	Switch(ctx context.Context, path string, b Branch) (string, error)
 }
 
-// RestoreTarget is the pin a submodule is restored to. It doesn't matter for
-// the superproject, whose target is always HEAD.
+// RestoreTarget is the pin a submodule is restored to, and whether staged
+// pins below it are kept. The superproject's target is always HEAD; only
+// RestoreHard matters for it.
 type RestoreTarget int
 
 const (
 	RestoreStaged    RestoreTarget = iota // the pin in the parent's index: a staged pin is kept and used
 	RestoreCommitted                      // the pin in the parent's HEAD: a staged pin is unstaged
+	RestoreHard                           // the pin in the parent's HEAD, and staged pins below are dropped too
 )
+
+// Committed reports whether a submodule goes to the pin in its parent's HEAD.
+func (t RestoreTarget) Committed() bool { return t != RestoreStaged }
+
+// KeepsStaged reports whether staged pins below the restored repository are
+// kept.
+func (t RestoreTarget) KeepsStaged() bool { return t != RestoreHard }
 
 // Loss is what a restore discards. The zero Loss means nothing is lost.
 type Loss struct {

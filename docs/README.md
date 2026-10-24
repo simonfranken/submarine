@@ -33,7 +33,8 @@ Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
 through a git provider (`internal/submodule/git`): `submarine [dir]`. It
 fetches only when asked (`f`) and follows changes made in other shells. `submarine --mock` shows
 the built-in mock data (`internal/submodule/mock`). `!` shows only
-submodules with problems. `x` restores the selection, `b` switches its
+submodules with problems. `x` restores the selection (`X` also drops
+staged pins), `b` switches its
 branch and `u` updates a pin that is behind ([actions.md](actions.md)).
 
 Next steps, roughly in order:

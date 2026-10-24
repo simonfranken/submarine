@@ -448,7 +448,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.layout()
 		return m, m.filter.Focus()
 	case key.Matches(msg, k.Restore):
-		return m.startRestore()
+		return m.startRestore(false)
+	case key.Matches(msg, k.HardRestore):
+		return m.startRestore(true)
 	case key.Matches(msg, k.Switch):
 		return m.startSwitch()
 	case key.Matches(msg, k.Update):

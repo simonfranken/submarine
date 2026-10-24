@@ -295,6 +295,7 @@ colors in components.
 | `/` | Open the filter, see [Filter](#filter) |
 | `!` | Toggle problems only, see [Problems only](#problems-only) |
 | `x` | Restore the selection, see [Restore](#restore) |
+| `X` | Hard restore the selection: committed pins, staged pins dropped at every depth, see [Restore](#restore) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).
@@ -361,7 +362,9 @@ the term*.
 | failed | red `restore of src/app failed: <git's message>`, until the next key |
 
 `y` restores, any other key cancels; the keys are not passed on while a
-question is open. After `c` the name reads `src/app to the committed pin`. Without a loss there is no question. Success flashes
+question is open. After `c` the name reads `src/app to the committed pin`.
+`X` (hard restore) never asks for the pin; its name reads `src/app to the
+committed pins`, and dropped staged pins alone don't make it ask. Without a loss there is no question. Success flashes
 `restored src/app` in the footer. For the header the name is `the
 superproject`. This line takes precedence over the filter line and the
 problems-only notice.
@@ -424,6 +427,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `u` | Update pin to the tip of its ref (superproject: fast-forward to upstream) | Submodule | Palette, Help |
 | `b` | Switch branch (popup) | Submodule | Palette, Help |
 | `x` | Restore | Submodule | Palette, Help |
+| `X` | Hard restore | Submodule | Palette, Help |
 | `f` | Fetch all repositories | Global | Help |
 | `r` | Reload everything | Global | Help |
 | `/` | Filter | Global | Help |

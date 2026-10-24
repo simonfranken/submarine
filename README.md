@@ -117,6 +117,10 @@ something would be lost, you are asked first:
 submodule with a staged pin, `x` first asks whether to restore to the staged
 pin (`s`) or the committed one (`c`, which unstages it).
 
+`X` is a hard restore: it goes to the committed pins without asking which
+one, and also drops the staged pins of submodules below the selection,
+which `x` keeps where it can. It still asks if work would be lost.
+
 ### Switch a branch with `b`
 
 Press `b` on a submodule (or the header for the superproject). A popup lists
@@ -170,6 +174,7 @@ files.
 | `u` | Update: move a pin that is behind to the tip of its branch (staged, like `b`); on the header, fast-forward the superproject |
 | `b` | Switch branch: pick a local or remote branch; its tip is staged and the repository restored to it |
 | `x` | Restore: make the worktree exactly what git records (asks if work would be lost) |
+| `X` | Hard restore: like `x`, but to the committed pins, dropping all staged pins below |
 | `f` / `r` | Fetch / reload |
 | `?` | Full help |
 | `q` | Quit. If a newer release exists, the footer offers `q quit and update to vX` (highlighted) and plain quit moves to `Q` |

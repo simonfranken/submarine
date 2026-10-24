@@ -310,6 +310,60 @@ func TestRestoreCommittedUnstagesThePin(t *testing.T) {
 	}
 }
 
+func TestRestoreHardDropsStagedPinsAtEveryDepth(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	log := filepath.Join(super, "libs", "log")
+	nested := filepath.Join(log, "modules", "nested")
+	committed := out(t, nested, "rev-parse", "HEAD")
+	base, err := p.RestoreLoss(context.Background(), "", submodule.RestoreHard)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// stage a new pin of nested in libs/log, on a commit only nested's
+	// detached HEAD reaches
+	git(t, nested, "checkout", "-q", "--detach")
+	git(t, nested, "commit", "-q", "--allow-empty", "-m", "Nested work")
+	git(t, log, "add", "modules/nested")
+
+	l, err := p.RestoreLoss(context.Background(), "", submodule.RestoreHard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if base.StagedPins == 0 || l.StagedPins != base.StagedPins+1 || l.Commits != base.Commits+1 {
+		t.Errorf("loss %+v, want the fixture's %d staged pins, the nested one and its commit", l, base.StagedPins)
+	}
+	if err := p.Restore(context.Background(), "", submodule.RestoreHard); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{super, log} {
+		if got := out(t, dir, "diff", "--cached", "--name-only"); got != "" {
+			t.Errorf("%s still staged: %q", dir, got)
+		}
+	}
+	if got := out(t, nested, "rev-parse", "HEAD"); got != committed {
+		t.Errorf("nested HEAD = %s, want the committed pin %s", got, committed)
+	}
+	assertExact(t, super)
+}
+
+func TestRestoreHardOfASubmoduleUnstagesItsPin(t *testing.T) {
+	p, root := ownFixture(t)
+	super := filepath.Join(root, "super")
+	committed := strings.Fields(out(t, super, "ls-tree", "HEAD", "libs/staged"))[2]
+
+	if err := p.Restore(context.Background(), "libs/staged", submodule.RestoreHard); err != nil {
+		t.Fatal(err)
+	}
+	if got := out(t, super, "diff", "--cached", "--name-only"); strings.Contains(got, "libs/staged") {
+		t.Errorf("still staged: %q", got)
+	}
+	if got := out(t, filepath.Join(super, "libs", "staged"), "rev-parse", "HEAD"); got != committed {
+		t.Errorf("HEAD = %s, want the committed pin %s", got, committed)
+	}
+}
+
 func TestRestoreLossCountsStagedPinsOfAMovingRepository(t *testing.T) {
 	p, root := ownFixture(t)
 	super := filepath.Join(root, "super")

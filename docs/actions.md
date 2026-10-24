@@ -1,6 +1,7 @@
 # Actions (draft)
 
-**Status:** [Restore](#restore) (key `x`, [D23](decisions.md)),
+**Status:** [Restore](#restore) (key `x`, [D23](decisions.md); hard restore
+`X`, [D30](decisions.md)),
 [Switch branch](#switch-branch) (key `b`, [D24](decisions.md)) and
 [Update pin](#update-pin) (key `u`, [D29](decisions.md)) are implemented.
 Stage pin was dropped ([D29](decisions.md)).
@@ -13,7 +14,7 @@ a difference in one of two directions:
 
 | Action | Direction | Key |
 |---|---|---|
-| [Restore](#restore) | The worktree follows the recorded state | `x` |
+| [Restore](#restore) | The worktree follows the recorded state | `x`, `X` (hard) |
 | [Switch branch](#switch-branch) | Both: the branch tip is recorded, then restored to | `b` |
 | [Update pin](#update-pin) | Both: a switch to the tip of the pin's ref | `u` |
 
@@ -65,6 +66,32 @@ Two exceptions, where a staged pin is not kept:
 - **An added, not yet committed submodule** is no staged pin: its
   `.gitmodules` entry is reset with the other files. Its directory then
   counts as an untracked file.
+
+### Hard restore
+
+`X` restores to the **committed** pins, at every depth: what the commits
+record, without any staged pin.
+
+- The selected submodule goes to the committed pin, without the `s` / `c`
+  question; a staged pin of it is unstaged (as with `c`). A submodule that
+  was added but not committed yet has no committed pin and goes to the one
+  in the index.
+- Every restored repository's index is reset to its `HEAD`, the superproject
+  included: its staged pins are dropped, and the submodules below follow the
+  committed tree.
+
+So `x` and `X` differ in the staged pins of repositories that the restore
+does not move: `x` (`s` or `c`) keeps them, `X` drops them. This matters
+for the superproject, for a selected submodule without a staged pin of its
+own, and for nested repositories that are on their pin. A repository that
+moves loses its staged pins either way (see above); then `x` → `c` and `X`
+end the same, but `c` asks first.
+
+The dropped staged pins are counted in the loss (`2 staged pins`), but
+alone they don't make restore ask: pressing `X` is the choice to drop them.
+If something else would be lost, the question lists them with it. The
+commits of a dropped pin stay in the submodule; if HEAD leaves them and no
+ref reaches them, they count as `commits on no branch`, as always.
 
 ### Postconditions
 
@@ -132,7 +159,7 @@ Restore discards work. The things it can lose:
 | Untracked files | `changed` (untracked) |
 | Conflicts and in-progress operations | `conflict`; merge, rebase, cherry-pick, revert state |
 | Commits | A detached HEAD off the pin whose commits are on no branch, tag or remote ref (only the reflog still has them) |
-| Staged pins | Staged pins in a repository that restore moves to another commit (see [Target](#target)) |
+| Staged pins | Staged pins in a repository that restore moves to another commit (see [Target](#target)); with `X` all staged pins |
 | Repositories | An untracked directory that is a repository with its **own** `.git` directory (a clone that was never added as a submodule). Its commits may exist nowhere else. A removed submodule whose git directory is absorbed into `.git/modules` loses only its worktree. Its objects stay |
 
 Nothing else is lost. Branches, stashes, remote refs, ignored files and
@@ -214,8 +241,10 @@ is resolved like `Status` does, and the first candidate (see
 accepts wins. The branch checked out before the restore is passed to the
 ref resolution. A child's `.gitmodules` branch is read once per parent.
 
-With `c` the parent's index gets the committed pin first (`update-index
---cacheinfo` in the parent).
+With `c` and `X` the parent's index gets the committed pin first
+(`update-index --cacheinfo` in the parent). With `X` (`RestoreHard`) the
+staged pins are not put back, and the loss check takes the children's
+targets from `HEAD`'s tree instead of the index.
 
 `RestoreLoss` (`lossOf`) follows the repositories on disk: per repository
 `status` (without submodules), the in-progress state files, and
