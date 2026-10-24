@@ -135,13 +135,7 @@ func (m Model) lossChecked(msg lossMsg) (tea.Model, tea.Cmd) {
 		m.restore.branch = msg.branch
 	}
 	m.restore.loss = msg.loss
-	// a hard restore is asked for to drop staged pins: alone they are no
-	// reason to ask, but are listed if something else is lost
-	lost := msg.loss
-	if m.restore.to == submodule.RestoreHard {
-		lost.StagedPins, lost.Modules = 0, 0
-	}
-	if lost.Empty() {
+	if msg.loss.Empty() {
 		return m.runRestore()
 	}
 	m.restore.phase = restoreAsking

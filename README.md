@@ -117,9 +117,9 @@ something would be lost, you are asked first:
 submodule with a staged pin, `x` first asks whether to restore to the staged
 pin (`s`) or the committed one (`c`, which unstages it).
 
-`X` is a hard restore: it goes to the committed pins without asking which
-one, and also drops the staged pins of submodules below the selection,
-which `x` keeps where it can. It still asks if work would be lost.
+`X` restores to the committed pins without asking which one, and also
+drops the staged pins of submodules below the selection, which `x` keeps
+where it can. It asks if work or a staged pin would be lost.
 
 ### Switch a branch with `b`
 

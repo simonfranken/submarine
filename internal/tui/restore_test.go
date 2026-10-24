@@ -189,7 +189,7 @@ func TestRestoreOfAStagedPinAsksWhichPin(t *testing.T) {
 	}
 }
 
-func TestHardRestoreOfAStagedPinDoesNotAsk(t *testing.T) {
+func TestHardRestoreAsksToDropStagedPins(t *testing.T) {
 	m, f := newRestoreModel(t, submodule.Loss{StagedPins: 2, Modules: 2})
 	mm := m.(Model)
 	var staged *submodule.Submodule
@@ -202,15 +202,22 @@ func TestHardRestoreOfAStagedPinDoesNotAsk(t *testing.T) {
 	mm.tree.Select(staged.Path)
 	m = mm
 
-	// neither which pin, nor y/n for staged pins alone
+	// not which pin, but y/n: staged pins alone are a reason to ask
 	m, cmd := press(m, "X")
-	var next tea.Cmd
 	for _, msg := range run(cmd) {
 		if l, ok := msg.(lossMsg); ok {
-			m, next = m.Update(l)
+			m, _ = m.Update(l)
 		}
 	}
-	feed(m, next)
+	r := m.(Model).restore
+	if r == nil || r.phase != restoreAsking {
+		t.Fatalf("want a question, got %+v", r)
+	}
+	if got := lossText(r.loss); got != "2 staged pins" {
+		t.Errorf("question lists %q, want the staged pins", got)
+	}
+	m, cmd = press(m, "y")
+	feed(m, cmd)
 	if len(f.to) != 1 || f.to[0] != submodule.RestoreHard || f.restored[0] != staged.Path {
 		t.Fatalf("restored %q to %v, want %s hard", f.restored, f.to, staged.Path)
 	}

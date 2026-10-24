@@ -87,9 +87,10 @@ own, and for nested repositories that are on their pin. A repository that
 moves loses its staged pins either way (see above); then `x` → `c` and `X`
 end the same, but `c` asks first.
 
-The dropped staged pins are counted in the loss (`2 staged pins`), but
-alone they don't make restore ask: pressing `X` is the choice to drop them.
-If something else would be lost, the question lists them with it. The
+The dropped staged pins are counted in the loss (`2 staged pins`), the
+selected submodule's own staged pin included, and like any loss they make
+restore ask (D31): `Restore libs/staged to the committed pins? Discards 1
+staged pin.` The
 commits of a dropped pin stay in the submodule; if HEAD leaves them and no
 ref reaches them, they count as `commits on no branch`, as always.
 

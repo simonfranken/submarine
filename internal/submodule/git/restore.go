@@ -35,10 +35,29 @@ func (p *Provider) RestoreLoss(ctx context.Context, path string, to submodule.Re
 	if err != nil {
 		return submodule.Loss{}, err
 	}
-	if dir == "" { // not initialized: nothing on disk to lose
-		return submodule.Loss{}, nil
+	var loss submodule.Loss
+	if dir != "" { // not initialized: nothing on disk to lose
+		loss = p.lossOf(ctx, dir, target, to.KeepsStaged())
 	}
-	return p.lossOf(ctx, dir, target, to.KeepsStaged()), nil
+	if to == submodule.RestoreHard && path != "" && p.pinStaged(ctx, path, target) {
+		// a hard restore unstages the submodule's own pin too
+		loss.StagedPins++
+		loss.Modules = max(loss.Modules, 1)
+	}
+	return loss, nil
+}
+
+// pinStaged reports whether the pin of path in its parent's index differs
+// from committed, the pin a hard restore goes to.
+func (p *Provider) pinStaged(ctx context.Context, path, committed string) bool {
+	p.mu.RLock()
+	in, ok := p.mods[path]
+	p.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	staged, err := pinOf(ctx, in, submodule.RestoreStaged)
+	return err == nil && staged != committed
 }
 
 // Restore makes path ("" is the superproject) and all submodules below it

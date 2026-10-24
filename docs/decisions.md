@@ -593,3 +593,18 @@ staged and committed pin is still useful there.
 the superproject. `restoreRepo` and `lossOf` take whether to keep staged
 pins; switch always keeps them. Without a committed pin (an added
 submodule), `X` uses the index pin.
+
+## D31 — Hard restore asks before dropping staged pins
+
+**Context.** D30 let `X` drop staged pins without a question: pressing `X`
+was the choice. In a usability walkthrough (see
+[notes/usability-plan.md](../notes/usability-plan.md)) `X` on `libs/staged`
+unstaged its pin silently. `X` is one Shift away from `x`, and users new to
+submodules don't know where to find the dropped commit again.
+**Decision.** Amends D30. Dropped staged pins are a loss like any other and
+make `X` ask: `Restore libs/staged to the committed pins? Discards 1 staged
+pin.` `RestoreLoss` with `RestoreHard` now also counts the selected
+submodule's own staged pin (in its parent's index), which `lossOf` doesn't
+see. The `c` answer of `x` stays silent: the user picked it in a question.
+**Consequences.** `X` asks more often, but only where it changes what is
+recorded. Without staged pins or other losses it still runs at once.

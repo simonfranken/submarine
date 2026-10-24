@@ -363,8 +363,9 @@ the term*.
 
 `y` restores, any other key cancels; the keys are not passed on while a
 question is open. After `c` the name reads `src/app to the committed pin`.
-`X` (hard restore) never asks for the pin; its name reads `src/app to the
-committed pins`, and dropped staged pins alone don't make it ask. Without a loss there is no question. Success flashes
+`X` (restore committed pins) never asks for the pin; its name reads
+`src/app to the committed pins`. Staged pins it drops count as a loss
+(`Discards 1 staged pin.`), so it asks (D31). Without a loss there is no question. Success flashes
 `restored src/app` in the footer. For the header the name is `the
 superproject`. This line takes precedence over the filter line and the
 problems-only notice.

@@ -150,7 +150,7 @@ commit hashes. It doesn't answer the questions users actually have:
   confirmation only if something would be lost. See [actions.md](actions.md#restore).
   `X` is a hard restore: it goes to the committed pins at every depth,
   without the pin question, and drops all staged pins below the selection
-  too. Dropped staged pins alone don't make it ask. See
+  too. Dropped staged pins count as a loss, so it asks first. See
   [actions.md](actions.md#hard-restore).
 
 - **F57** `b` opens a popup in the middle of the screen with a search line

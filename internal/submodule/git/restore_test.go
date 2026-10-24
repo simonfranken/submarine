@@ -364,6 +364,29 @@ func TestRestoreHardOfASubmoduleUnstagesItsPin(t *testing.T) {
 	}
 }
 
+func TestRestoreLossOfAHardRestoreCountsTheOwnStagedPin(t *testing.T) {
+	p, _ := ownFixture(t)
+	committed, err := p.RestoreLoss(context.Background(), "libs/staged", submodule.RestoreCommitted)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hard, err := p.RestoreLoss(context.Background(), "libs/staged", submodule.RestoreHard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if hard.StagedPins != committed.StagedPins+1 || hard.Modules == 0 {
+		t.Errorf("hard loss %+v, want the own staged pin on top of %+v", hard, committed)
+	}
+	// without a staged pin, a hard restore unstages nothing of its own
+	clean, err := p.RestoreLoss(context.Background(), "src/ui", submodule.RestoreHard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if clean.StagedPins != 0 {
+		t.Errorf("loss of src/ui %+v, want no staged pin", clean)
+	}
+}
+
 func TestRestoreLossCountsStagedPinsOfAMovingRepository(t *testing.T) {
 	p, root := ownFixture(t)
 	super := filepath.Join(root, "super")
