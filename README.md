@@ -103,8 +103,10 @@ clipboard, ready for `cd <paste>`. It works over SSH too (OSC 52; in tmux,
 Select a submodule (or the header for the whole superproject) and press `x`.
 Its worktree becomes exactly what git records, and so do all submodules
 below it: changes are reset, untracked files removed, merges and rebases
-ended, missing submodules cloned. Staged pins are kept. If something would be
-lost, you are asked first:
+ended, missing submodules cloned. Staged pins are kept. A submodule whose pin
+is a branch tip ends on that branch instead of a detached HEAD (a missing
+local branch is created from the remote one; no branch is ever moved). If
+something would be lost, you are asked first:
 
 ```
  Restore src/app? Discards 7 changed files in 3 repositories.      y restore · n cancel
