@@ -608,3 +608,29 @@ submodule's own staged pin (in its parent's index), which `lossOf` doesn't
 see. The `c` answer of `x` stays silent: the user picked it in a question.
 **Consequences.** `X` asks more often, but only where it changes what is
 recorded. Without staged pins or other losses it still runs at once.
+
+## D32 — The screen explains itself
+
+**Context.** The target user is a developer who doesn't know submodules
+well and doesn't read manuals. The walkthrough found labels that don't say
+what a key does (`x restore`, `X hard restore`), important keys found only
+in `?` (`!`, `/`, `f`), and status words explained nowhere.
+**Decision.**
+- Labels name the target: `x restore to pin`, `X restore committed pins`.
+  "Hard" suggested "discards changes", which both do.
+- A fourth key group, Tools (`!`, `/`, `f`), in the footer after the
+  navigation keys, dropped before them.
+- On the header, `u` reads `pull (fast-forward)`: the label follows the
+  selection, the key doesn't.
+- The full help gets titled columns, and a second page, a legend of the
+  status words, symbols and spine roles in their colors. Issue levels move
+  to `IssueKind.Level()` so the legend can't drift from the tree. `esc`
+  closes either page: cycling back with `?` alone was not obvious.
+- A start hint above the footer until the first key.
+- `fetched <age> · f fetch` in the detail pane when the last fetch is older
+  than a day.
+**Alternatives.** A first-run screen or tutorial: needs state, and is
+skipped. Contextual palettes that grey out impossible keys: larger, kept for
+later (item 10 of the usability plan).
+**Consequences.** `footer.Keys` drops `help.KeyMap` for `Tools`,
+`HelpGroups` and `LegendKeys`; the footer renders the full help itself.

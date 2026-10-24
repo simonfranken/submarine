@@ -390,13 +390,14 @@ runs the switch flow with it (`SwitchLoss`, `Switch`).
 All three are submodule keys (`keyMap.Submodule`), shown in the detail
 pane's palette, or in the footer when the pane can't show it. They are
 always offered, the palette is static: restore is idempotent, and `u` says
-why it can't update.
+why it can't update. Only `u`'s label follows the selection: on the header
+it reads `pull (fast-forward)`.
 
 | Key | Action | Pressed when not possible (flash) |
 |---|---|---|
-| `x` restore | Restore the selection | `this data source can't restore` (mock); `wait for the restore of … to finish` |
+| `x` restore to pin, `X` restore committed pins | Restore the selection; `X` see [Hard restore](#hard-restore) | `this data source can't restore` (mock); `wait for the restore of … to finish` |
 | `b` switch branch | [Switch branch](#switch-branch) | `this data source can't switch branches`; `wait for the restore of … to finish`; `src/app is not initialized; restore it first` |
-| `u` update pin | [Update pin](#update-pin) | `this data source can't update pins`; `wait for the restore of … to finish`; `the superproject has no upstream branch`; `src/app is still loading`; `src/app is not initialized; restore it first`; `the pin of src/app is not on a branch`; `the pin of src/app has diverged from origin/main; b switches the branch`; `the pin of src/app is ahead of origin/main`; `src/app is up to date with origin/main` (the superproject without `the pin of`); after the check `can't update src/app: main is a local branch; b switches to it` |
+| `u` update pin (`pull (fast-forward)` on the header) | [Update pin](#update-pin) | `this data source can't update pins`; `wait for the restore of … to finish`; `the superproject has no upstream branch`; `src/app is still loading`; `src/app is not initialized; restore it first`; `the pin of src/app is not on a branch`; `the pin of src/app has diverged from origin/main; b switches the branch`; `the pin of src/app is ahead of origin/main`; `src/app is up to date with origin/main` (the superproject without `the pin of`); after the check `can't update src/app: main is a local branch; b switches to it` |
 
 `R` would sit next to `r` (reload), a dangerous mix-up for a destructive
 action, hence `x`.

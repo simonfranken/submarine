@@ -72,16 +72,13 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 	if errored > 0 {
 		parts = append(parts, t.LevelStyle(submodule.LevelDanger, bar).Render(fmt.Sprintf("%d error", errored)))
 	}
-	for _, k := range []submodule.IssueKind{
-		submodule.IssueUnpushed, submodule.IssueConflict, submodule.IssueMissing,
-		submodule.IssueOffPin, submodule.IssueChanged, submodule.IssueOffTarget,
-	} {
+	for _, k := range submodule.Kinds {
 		if n := perKind[k]; n > 0 {
 			parts = append(parts, t.LevelStyle(level[k], bar).Render(fmt.Sprintf("%d %s", n, theme.IssueWord(k))))
 		}
 	}
 	if staged > 0 {
-		parts = append(parts, seg(t.Info, fmt.Sprintf("%d pin staged", staged)))
+		parts = append(parts, seg(t.Info, fmt.Sprintf("%d %s", staged, theme.Staged)))
 	}
 	if loading > 0 {
 		parts = append(parts, seg(t.Muted, fmt.Sprintf("%d loading", loading)))

@@ -37,7 +37,7 @@ internal/tui/                 Bubble Tea application
   detail/                     detail pane; changes.go: change preview
   header/                     header line
   branches/                   branch picker popup (search line + list)
-  footer/                     key bar (navigation left, global right) and flash messages
+  footer/                     key bar (navigation and tools left, global right), full help pages (keys, legend) and flash messages
 ```
 
 ### Layering rules

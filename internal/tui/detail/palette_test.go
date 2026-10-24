@@ -15,7 +15,7 @@ func TestPaletteWrapsInsteadOfCuttingKeys(t *testing.T) {
 		key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy path")),
 		key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "update pin")),
 		key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "switch branch")),
-		key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "restore")),
+		key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "restore to pin")),
 	}
 	m := New(theme.Default(), keys)
 	m.SetSize(36, 20)
@@ -24,7 +24,7 @@ func TestPaletteWrapsInsteadOfCuttingKeys(t *testing.T) {
 		t.Fatalf("want 2 lines, got %q", lines)
 	}
 	all := strings.Join(lines, "\n")
-	for _, want := range []string{"copy path", "update pin", "switch branch", "x restore"} {
+	for _, want := range []string{"copy path", "update pin", "switch branch", "x restore to pin"} {
 		if !strings.Contains(all, want) {
 			t.Errorf("palette lacks %q: %q", want, lines)
 		}

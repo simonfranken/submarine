@@ -60,6 +60,7 @@ type Model struct {
 	picker     *branches.Model // the branch picker, nil if closed
 	pickerPath string          // the repository the picker is for
 	notice     string          // an error to show above the footer until the next key
+	hint       bool            // the hint for newcomers above the footer, until the first key
 
 	checkUpdate func(context.Context) string // looks for a newer release, nil if off
 	update      string                       // the newer release found, "" if none
@@ -104,6 +105,7 @@ func New(ctx context.Context, p submodule.Provider, opts ...Option) Model {
 		footer:   footer.New(t, k),
 		spinner:  sp,
 		filter:   fi,
+		hint:     true,
 	}
 	m.fetcher, _ = p.(submodule.Fetcher)
 	m.watcher, _ = p.(submodule.Watcher)
@@ -385,14 +387,17 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.answerRestore(msg)
 		}
 	}
-	if m.notice != "" {
-		m.notice = ""
+	if m.notice != "" || m.hint {
+		m.notice, m.hint = "", false
 		m.layout()
 	}
 	if m.filter.Focused() {
 		return m.typeFilter(msg)
 	}
 	switch {
+	case m.footer.HelpOpen() && msg.Type == tea.KeyEsc: // before the filter's esc
+		m.footer.CloseHelp()
+		m.layout()
 	case m.filtering && msg.Type == tea.KeyEsc:
 		m.closeFilter()
 	case key.Matches(msg, k.Quit):
@@ -401,7 +406,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.updateTo = m.update
 		return m, tea.Quit
 	case key.Matches(msg, k.Help):
-		m.footer.ToggleHelp()
+		m.footer.CycleHelp()
 		m.layout()
 	case key.Matches(msg, k.Up):
 		m.tree.Up()
@@ -517,10 +522,16 @@ func (m Model) filterView() string {
 }
 
 // extraLine reports whether a line above the footer is shown: a restore in
-// progress, a failure, the filter, or the notice that only problems are
-// shown.
+// progress, a failure, the filter, the notice that only problems are shown,
+// or the hint for newcomers.
 func (m Model) extraLine() bool {
-	return m.filtering || m.tree.ProblemsOnly() || m.restore != nil || m.notice != ""
+	return m.filtering || m.tree.ProblemsOnly() || m.restore != nil || m.notice != "" || m.hint
+}
+
+// hintView is the line above the footer until the first key: where help is.
+func (m Model) hintView() string {
+	muted := theme.Fg(m.theme.Muted)
+	return m.line(muted.Render("new here? ")+theme.Fg(m.theme.Text).Bold(true).Render("?")+muted.Render(" shows every key and what the words mean"), "")
 }
 
 // problemsView is the line above the footer while only problems are shown, so
@@ -581,6 +592,11 @@ func (m Model) View() string {
 		return theme.Fg(m.theme.Danger).Render("error: " + m.err.Error())
 	}
 
+	// the keys as they read for the selection; m is a copy
+	k := m.keys.forSelection(m.tree.RootSelected())
+	m.footer.SetKeys(k)
+	m.detail.SetActions(k.Submodule())
+
 	body := m.tree.View()
 	if m.showDetail {
 		pane := lipgloss.NewStyle().
@@ -601,6 +617,8 @@ func (m Model) View() string {
 		parts = append(parts, m.filterView())
 	} else if m.tree.ProblemsOnly() {
 		parts = append(parts, m.problemsView())
+	} else if m.hint {
+		parts = append(parts, m.hintView())
 	}
 	view := zone.Scan(lipgloss.JoinVertical(lipgloss.Left, append(parts, m.footer.View())...))
 	if m.picker != nil { // after zone.Scan, so no zone marker is cut

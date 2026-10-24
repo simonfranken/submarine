@@ -42,3 +42,7 @@ Next steps, roughly in order:
 1. (done) Write actions: restore, switch branch, update pin, see
    [actions.md](actions.md). Stage pin was dropped (D29).
 2. (done) "Problems only" (`!`) view, reusing the tree's filter.
+3. Usability pass for users new to submodules, see
+   [notes/usability-plan.md](../notes/usability-plan.md). The low-effort
+   items are done (D31, D32); next are the issue hints and the palette
+   that fits the selection.

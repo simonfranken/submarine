@@ -24,6 +24,21 @@ const (
 	IssueOffTarget                  // pin pushed, but not on the target branch
 )
 
+// Kinds lists every issue kind, most severe first.
+var Kinds = []IssueKind{IssueUnpushed, IssueConflict, IssueMissing, IssueOffPin, IssueChanged, IssueOffTarget}
+
+// Level is how much attention an issue of kind k deserves.
+func (k IssueKind) Level() Level {
+	switch k {
+	case IssueUnpushed, IssueConflict:
+		return LevelDanger
+	case IssueOffTarget:
+		return LevelInfo
+	default:
+		return LevelWarn
+	}
+}
+
 // Issue is one problem of a submodule. Detail distinguishes the states that
 // are summarized into one kind.
 type Issue struct {
@@ -40,9 +55,9 @@ func (s *Status) Issues() []Issue {
 	}
 	switch s.Presence {
 	case NotInitialized:
-		return []Issue{{IssueMissing, LevelWarn, "not initialized"}}
+		return []Issue{{IssueMissing, IssueMissing.Level(), "not initialized"}}
 	case DirMissing:
-		return []Issue{{IssueMissing, LevelWarn, "directory missing"}}
+		return []Issue{{IssueMissing, IssueMissing.Level(), "directory missing"}}
 	}
 
 	var out []Issue
@@ -51,24 +66,24 @@ func (s *Status) Issues() []Issue {
 		if s.Root {
 			detail = "HEAD not pushed to any remote"
 		}
-		out = append(out, Issue{IssueUnpushed, LevelDanger, detail})
+		out = append(out, Issue{IssueUnpushed, IssueUnpushed.Level(), detail})
 	}
 	if s.Worktree == WorktreeConflict {
-		out = append(out, Issue{IssueConflict, LevelDanger, "merge conflict"})
+		out = append(out, Issue{IssueConflict, IssueConflict.Level(), "merge conflict"})
 	}
 	if s.Checkout == CheckoutDiffers {
-		out = append(out, Issue{IssueOffPin, LevelWarn, "checkout differs from pin"})
+		out = append(out, Issue{IssueOffPin, IssueOffPin.Level(), "checkout differs from pin"})
 	}
 	switch s.Worktree {
 	case WorktreeModified:
-		out = append(out, Issue{IssueChanged, LevelWarn, "uncommitted changes"})
+		out = append(out, Issue{IssueChanged, IssueChanged.Level(), "uncommitted changes"})
 	case WorktreeUntracked:
-		out = append(out, Issue{IssueChanged, LevelWarn, s.untrackedText()})
+		out = append(out, Issue{IssueChanged, IssueChanged.Level(), s.untrackedText()})
 	}
 	// a pin that is pushed, but not on the target (usually main); an
 	// unpushed pin is not on it either, but has the worse issue
 	if !s.Root && s.Pin.Pushed && s.Pin.Target != "" && s.Pin.Ref != s.Pin.Target {
-		out = append(out, Issue{IssueOffTarget, LevelInfo, s.offTargetText()})
+		out = append(out, Issue{IssueOffTarget, IssueOffTarget.Level(), s.offTargetText()})
 	}
 	return out
 }

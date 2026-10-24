@@ -6,6 +6,7 @@ import (
 	"path"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/key"
@@ -17,6 +18,9 @@ import (
 )
 
 const labelWidth = 11
+
+// staleFetch is the age of the last fetch from which the pane suggests f.
+const staleFetch = 24 * time.Hour
 
 type Model struct {
 	theme   theme.Theme
@@ -37,6 +41,9 @@ func New(t theme.Theme, actions []key.Binding) Model {
 
 // PaletteVisible reports whether the palette of submodule actions fits.
 func (m Model) PaletteVisible() bool { return m.height >= paletteMinHeight }
+
+// SetActions replaces the bindings of the palette.
+func (m *Model) SetActions(actions []key.Binding) { m.actions = actions }
 
 func (m *Model) SetSize(w, h int)        { m.width, m.height = w, h }
 func (m *Model) SetSpinner(frame string) { m.spinner = frame }
@@ -123,10 +130,17 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	st := s.Status
 
 	// the age of the last fetch is right-aligned in the name's line
+	// with a hint to fetch if the last fetch is old, and room for it
 	if st.Presence == submodule.PresenceOK {
-		fetched := "fetched " + theme.Ago(st.FetchedAt)
-		if gap := m.width - ansi.StringWidth(s.Name) - len(fetched); gap >= 2 {
-			out[1] += strings.Repeat(" ", gap) + muted.Render(fetched)
+		fetched := muted.Render("fetched " + theme.Ago(st.FetchedAt))
+		if time.Since(st.FetchedAt) > staleFetch {
+			hinted := fetched + muted.Render(" · ") + text.Bold(true).Render("f") + muted.Render(" fetch")
+			if m.width-ansi.StringWidth(s.Name)-lipgloss.Width(hinted) >= 2 {
+				fetched = hinted
+			}
+		}
+		if gap := m.width - ansi.StringWidth(s.Name) - lipgloss.Width(fetched); gap >= 2 {
+			out[1] += strings.Repeat(" ", gap) + fetched
 		}
 	}
 

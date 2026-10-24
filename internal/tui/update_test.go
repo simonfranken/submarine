@@ -66,3 +66,45 @@ func TestQuitAndUpdate(t *testing.T) {
 		t.Errorf("ctrl+c must quit without updating, got update to %q", m2.(Model).UpdateTo())
 	}
 }
+
+func TestHintUntilTheFirstKey(t *testing.T) {
+	m := newUpdateModel("")
+	if !m.(Model).extraLine() || !strings.Contains(m.View(), "new here?") {
+		t.Fatal("no hint on start")
+	}
+	m, _ = press(m, "j")
+	if m.(Model).extraLine() || strings.Contains(m.View(), "new here?") {
+		t.Error("the hint must go away with the first key")
+	}
+}
+
+func TestEscClosesTheHelp(t *testing.T) {
+	for _, presses := range []int{1, 2} { // the keys page, the legend
+		m := newUpdateModel("")
+		for range presses {
+			m, _ = press(m, "?")
+		}
+		if !m.(Model).footer.HelpOpen() {
+			t.Fatalf("%d × ?: no help", presses)
+		}
+		m, _ = pressKey(m, tea.KeyEsc)
+		if m.(Model).footer.HelpOpen() {
+			t.Errorf("%d × ?: esc must close the help", presses)
+		}
+	}
+}
+
+func TestEscClosesTheHelpBeforeTheFilter(t *testing.T) {
+	m := newUpdateModel("")
+	m, _ = press(m, "/")
+	m, _ = pressKey(m, tea.KeyEnter) // keys back to the tree, the filter stays
+	m, _ = press(m, "?")
+	m, _ = pressKey(m, tea.KeyEsc)
+	if mm := m.(Model); mm.footer.HelpOpen() || !mm.filtering {
+		t.Errorf("first esc: help open %v, filtering %v; want the help closed, the filter kept", mm.footer.HelpOpen(), mm.filtering)
+	}
+	m, _ = pressKey(m, tea.KeyEsc)
+	if m.(Model).filtering {
+		t.Error("second esc must close the filter")
+	}
+}

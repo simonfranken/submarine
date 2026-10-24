@@ -26,7 +26,7 @@
      my_submodule_3       unpushed       origin/main    ↑1               │           ┊ 1 commit
  libs/                                                                   │ tip       ● 6f5e4d3 Release 2.1.0
      logging                             origin/main    ↓3               │
- ↑↓/jk move • ←→/hl fold • ⇧←→/HL fold all • space toggle • ? help • q quit
+ ↑↓/jk move • ←→/hl collapse/expand • ⇧←→/HL all • space toggle • ! problems only • / filter • f fetch   ? help • q quit
 ```
 
 | Area | Height / width |
@@ -34,14 +34,18 @@
 | Header | 1 line |
 | Tree | Remaining width |
 | Detail pane | 40% of the width, at least 36 columns; hidden below 90 columns |
-| Filter line | 1 line above the footer, only while filtering |
+| Line above the footer | 1 line, only while filtering, showing problems only, during a restore, after a failure, or until the first key (hint) |
 | Footer | 1 line (more with full help) |
 
 ### Key bar and palette
 
-Keys come in three groups (`keyMap.Navigation`, `.Submodule`, `.Global`):
+Keys come in four groups (`keyMap.Navigation`, `.Tools`, `.Submodule`,
+`.Global`):
 
-- **Navigation** (move, fold, toggle): left in the footer.
+- **Navigation** (move, collapse/expand, toggle): left in the footer.
+- **Tools** (`!` problems only, `/` filter, `f` fetch): in the footer after
+  the navigation keys, most useful first. They act on the whole list and
+  would otherwise be found only in the full help (D32).
 - **Global** (`?`, `q`): right-aligned in the footer, always kept. If a newer
   release exists, `q quit and update to vX` follows them as the right-most
   item, on a highlighted background (`Theme.Highlight`: black on Primary), and
@@ -50,11 +54,36 @@ Keys come in three groups (`keyMap.Navigation`, `.Submodule`, `.Global`):
   bottom of the detail pane, wrapped onto a second line if the pane is too
   narrow for all keys (none is cut off). It is left out if the pane is
   shorter than 12 lines. Whenever the palette isn't shown (pane hidden or too short), these
-  keys move into the footer after the navigation keys.
+  keys move into the footer after the tools. With the header selected, `u`
+  reads `u pull (fast-forward)`, which is what it does there (D29).
 
 If the footer is too narrow, keys are dropped from the left group's end
-(submodule keys first); the global keys stay. Full help (`?`) lists all keys
-in columns, whatever the size. Keys work whether or not they are shown.
+(submodule keys first, then the tools); the global keys stay. Keys work
+whether or not they are shown.
+
+### Full help
+
+`?` steps through two pages, then back to the key bar; `esc` closes either
+page at once (before it would close the filter):
+
+1. **Keys**: every key in titled columns: `Move`, `Jump`, `Selected
+   submodule`, `All submodules`, `App`. The `App` column says `? what words
+   mean` and `esc close`.
+2. **Legend**: what the words and symbols mean, in their colors: `Status`
+   (each issue word, `staged`, `in sync`), `Symbols` (`●`, `↑n ↓n`, `+n`,
+   `·k`, `[n]`), `Commits` (the spine's roles). Then `App` with `esc close`
+   (`?` closes it too).
+   The words come from `Theme.Legend()`; issue colors from
+   `IssueKind.Level()`, so they are the tree's.
+
+Titles are muted and bold. Columns that don't fit are left out from the
+right, marked with `…`; the `App` column is always kept.
+
+### Start hint
+
+Until the first key, the line above the footer reads muted `new here? ?
+shows every key and what the words mean`. Every start, no state is kept.
+Any other line above the footer (filter, restore, …) takes precedence.
 
 ### Tree row
 
@@ -85,7 +114,9 @@ For the superproject (header selected), the `pin` and `you` roles become
 
 1. Directory (muted) and name (bold); `fetched <age>` of the submodule,
    muted, right-aligned in the name's line (left out if the pane is too
-   narrow, or the submodule is missing)
+   narrow, or the submodule is missing). If the last fetch is older than a
+   day, or there was none, it continues `· f fetch` (key bold), if there is
+   room
 2. One line per issue: word (colored, 11 columns) + explanation;
    `in sync  nothing to do` if there are none and no pin is staged;
    `staged` and `detached HEAD on pin` as information
@@ -213,7 +244,7 @@ shows the superproject's own state word like a tree row (`in sync`,
 `changed`, `unpushed +1`, spinner, `error`). The counts that follow are
 about submodules only.
 
-`path  branch ↑↓ state            n error · <count> <issue>… · n pin staged · n loading · n submodules · <fetch>`
+`path  branch ↑↓ state            n error · <count> <issue>… · n staged · n loading · n submodules · <fetch>`
 
 The summary and `<fetch>` form one group at the right edge; the path,
 branch and state stay at the left. If the line is too narrow it is cut with
@@ -287,7 +318,8 @@ colors in components.
 | `H` / `shift+←` / `ctrl+←` | Collapse all (resets remembered expansion); select the top-level ancestor |
 | `home` / `g`, `end` / `G` | Header (superproject) / last submodule |
 | `pgup`, `pgdn` | Move by one screen |
-| `?` | Toggle full help |
+| `?` | Full help: keys, then the legend, then closed, see [Full help](#full-help) |
+| `esc` | Close the full help; else close the filter |
 | `q`, `ctrl+c` | Quit. With a newer release: `q` quits and updates, `Q` and `ctrl+c` quit |
 | `f` | Fetch all repositories (does nothing while a fetch runs) |
 | `r` | Reload everything (e.g. after editing files) |
@@ -295,7 +327,7 @@ colors in components.
 | `/` | Open the filter, see [Filter](#filter) |
 | `!` | Toggle problems only, see [Problems only](#problems-only) |
 | `x` | Restore the selection, see [Restore](#restore) |
-| `X` | Hard restore the selection: committed pins, staged pins dropped at every depth, see [Restore](#restore) |
+| `X` | Restore the selection to the committed pins, staged pins dropped at every depth, see [Restore](#restore) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).
@@ -425,15 +457,16 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `home` / `g`, `end` / `G` | Header / last submodule | Navigation | Help |
 | `pgup`, `pgdn` | Move by one screen | Navigation | Help |
 | `c` | Copy path | Submodule | Palette, Help |
-| `u` | Update pin to the tip of its ref (superproject: fast-forward to upstream) | Submodule | Palette, Help |
+| `u` | Update pin to the tip of its ref (superproject: fast-forward to upstream, label `pull (fast-forward)`) | Submodule | Palette, Help |
 | `b` | Switch branch (popup) | Submodule | Palette, Help |
-| `x` | Restore | Submodule | Palette, Help |
-| `X` | Hard restore | Submodule | Palette, Help |
-| `f` | Fetch all repositories | Global | Help |
+| `x` | Restore to pin | Submodule | Palette, Help |
+| `X` | Restore committed pins | Submodule | Palette, Help |
+| `!` | Problems only (toggle) | Tools | Bar, Help |
+| `/` | Filter | Tools | Bar, Help |
+| `f` | Fetch all repositories | Tools | Bar, Help |
 | `r` | Reload everything | Global | Help |
-| `/` | Filter | Global | Help |
-| `!` | Problems only (toggle) | Global | Help |
-| `?` | Toggle full help | Global | Bar, Help |
+| `?` | Full help: keys, legend, close | Global | Bar, Help |
+| `esc` | Close the full help (and the filter, see [Filter](#filter)) | Global | Help |
 | `q`, `ctrl+c` | Quit (`Q`, `ctrl+c` while an update is offered) | Global | Bar, Help |
 | `q` | Quit and update to the newer release (only if there is one) | Global | Bar (highlighted), Help |
 

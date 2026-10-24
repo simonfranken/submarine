@@ -2,6 +2,8 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/key"
+
+	"submarine/internal/tui/footer"
 )
 
 type keyMap struct {
@@ -31,8 +33,8 @@ func defaultKeys() keyMap {
 		Reload:      key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reload")),
 		Filter:      key.NewBinding(key.WithKeys("/"), key.WithHelp("/", "filter")),
 		Issues:      key.NewBinding(key.WithKeys("!"), key.WithHelp("!", "problems only")),
-		Restore:     key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "restore")),
-		HardRestore: key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "hard restore")),
+		Restore:     key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "restore to pin")),
+		HardRestore: key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "restore committed pins")),
 		Switch:      key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "switch branch")),
 		Update:      key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "update pin")),
 		Copy:        key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy path")),
@@ -52,10 +54,15 @@ func (k *keyMap) SetUpdate(v string) {
 // Navigation returns the bindings that move the selection or fold the tree.
 func (k keyMap) Navigation() []key.Binding {
 	move := key.NewBinding(key.WithKeys("up"), key.WithHelp("↑↓/jk", "move"))
-	fold := key.NewBinding(key.WithKeys("left"), key.WithHelp("←→/hl", "fold"))
-	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("⇧←→/HL", "fold all"))
+	fold := key.NewBinding(key.WithKeys("left"), key.WithHelp("←→/hl", "collapse/expand"))
+	all := key.NewBinding(key.WithKeys("H"), key.WithHelp("⇧←→/HL", "all"))
 	return []key.Binding{move, fold, all, k.Toggle}
 }
+
+// Tools returns the bindings that act on the whole list: problems only,
+// filter and fetch, most useful first, since the footer drops them from the
+// end. It shows them after the navigation keys.
+func (k keyMap) Tools() []key.Binding { return []key.Binding{k.Issues, k.Filter, k.Fetch} }
 
 // Submodule returns the bindings that act on the selected submodule. They
 // are shown in the detail pane, or in the footer if the pane can't show them.
@@ -83,17 +90,31 @@ func (k keyMap) Highlight() []key.Binding {
 	return []key.Binding{k.QuitUpdate}
 }
 
-func (k keyMap) ShortHelp() []key.Binding {
-	return append(append(k.Navigation(), k.Submodule()...), k.Global()...)
+// forSelection returns the keys as they read for the selection: on the
+// superproject, u fast-forwards its branch (D29).
+func (k keyMap) forSelection(root bool) keyMap {
+	if root {
+		k.Update.SetHelp("u", "pull (fast-forward)")
+	}
+	return k
 }
 
-func (k keyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Up, k.Down, k.Left, k.Right, k.Toggle},
-		{k.CollapseAll, k.ExpandAll},
-		{k.Home, k.End, k.PageUp, k.PageDown},
-		{k.Copy, k.Update, k.Switch, k.Restore, k.HardRestore},
-		{k.Fetch, k.Reload, k.Filter, k.Issues},
-		append([]key.Binding{k.Help, k.Quit}, k.fullUpdate()...),
+// HelpGroups returns the columns of the full help, each with a title.
+func (k keyMap) HelpGroups() []footer.Group {
+	help := key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "what words mean"))
+	esc := key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
+	return []footer.Group{
+		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Toggle, k.CollapseAll, k.ExpandAll}},
+		{Title: "Jump", Keys: []key.Binding{k.Home, k.End, k.PageUp, k.PageDown}},
+		{Title: "Selected submodule", Keys: k.Submodule()},
+		{Title: "All submodules", Keys: []key.Binding{k.Fetch, k.Reload, k.Filter, k.Issues}},
+		{Title: "App", Keys: append([]key.Binding{help, esc, k.Quit}, k.fullUpdate()...)},
 	}
+}
+
+// LegendKeys returns the column next to the legend, the help's last page;
+// ? closes it too, but esc is the key to tell.
+func (k keyMap) LegendKeys() footer.Group {
+	esc := key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "close"))
+	return footer.Group{Title: "App", Keys: append([]key.Binding{esc, k.Quit}, k.fullUpdate()...)}
 }

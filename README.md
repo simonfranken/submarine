@@ -168,15 +168,15 @@ files.
 | `H` `L` / `⇧←` `⇧→` | Collapse / expand all |
 | `space` | Toggle the selected submodule |
 | `home` `end` / `g` `G`, `pgup` `pgdn` | Jump, page |
-| `/` | Filter |
 | `!` | Problems only |
+| `/` | Filter |
 | `c` | Copy path |
 | `u` | Update: move a pin that is behind to the tip of its branch (staged, like `b`); on the header, fast-forward the superproject |
 | `b` | Switch branch: pick a local or remote branch; its tip is staged and the repository restored to it |
-| `x` | Restore: make the worktree exactly what git records (asks if work would be lost) |
-| `X` | Hard restore: like `x`, but to the committed pins, dropping all staged pins below |
+| `x` | Restore to pin: make the worktree exactly what git records (asks if work would be lost) |
+| `X` | Restore committed pins: like `x`, but dropping all staged pins below (asks first) |
 | `f` / `r` | Fetch / reload |
-| `?` | Full help |
+| `?` | Full help: every key, then what the words and symbols mean (`esc` closes it) |
 | `q` | Quit. If a newer release exists, the footer offers `q quit and update to vX` (highlighted) and plain quit moves to `Q` |
 
 The mouse works too: click to select, click `▸` to toggle, wheel to move. In
