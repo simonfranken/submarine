@@ -213,10 +213,10 @@ No CI runner: releases are built and published from a developer machine.
   `https://github.com/simonfranken/submarine/releases`:
   - `latest/download/VERSION`
   - `download/<version>/submarine_<os>_<arch>` and `checksums.txt`
-- Before the move to GitHub, releases lived in the Gitea generic registry
+- Up to v0.12.0, releases lived in the Gitea generic registry
   (`git.simon-franken.de/api/packages/simonfranken/generic`, see D33). It
-  stays online for old binaries. `make release-gitea` publishes the bridge
-  version there in the old layout and refuses until GitHub serves it.
+  stays online, frozen at the bridge release v0.13.0, so old binaries
+  update there once and then follow GitHub.
 - The `release` skill (`.claude/skills/release/SKILL.md`) drives a release:
   latest tag → next semver from the commits since → check (`vet`, `test`,
   `gofmt`, `make dist`) → tag and push → the developer runs `make release` →

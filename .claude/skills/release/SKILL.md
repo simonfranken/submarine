@@ -10,8 +10,8 @@ A release is built on the developer's machine (`make release`, see
 `docs/architecture.md#distribution`). `make release` creates the GitHub
 release of the **clean `vX.Y.Z` tag at HEAD**, with the binaries as assets.
 This skill does everything around it. The developer runs `make release`
-themselves, in the middle: you never run it and never read or print `.env`,
-`GH_TOKEN` or `GITEA_TOKEN`.
+themselves, in the middle: you never run it and never read or print `.env`
+or `GH_TOKEN`.
 
 Pushing a tag and creating a release are outward-facing and hard to undo.
 Do them only after the confirmation in step 5, and never force-push, move or
@@ -42,8 +42,7 @@ Cross-check with the `mcp__github__get_latest_release` MCP tool (load it with
 ToolSearch first). If the tag and the GitHub release differ (a tag without a
 release is normal for the one in progress, a release without a tag is not),
 tell the user and ask before going on. With no tag at all, the first release
-is `v0.1.0`. While the Makefile has `release-gitea` (step 10), GitHub has
-no releases yet: cross-check with `mcp__gitea__get_latest_release` instead.
+is `v0.1.0`.
 
 ## 3. Changes since
 
@@ -150,23 +149,16 @@ curl -fsSL https://github.com/simonfranken/submarine/releases/latest/download/VE
 
 must print `vX.Y.Z` (this is what `install.sh` and `submarine update`
 read). Check with `mcp__github__get_release_by_tag` that it is not a draft
-and has the assets `submarine_{linux,darwin}_{amd64,arm64}`,
-`checksums.txt` and `VERSION`. If anything is missing, report it. Finish
-with the link to the release and the version.
-
-## 10. Bridge release (only while the Makefile has `release-gitea`)
-
-The first GitHub release is also published to the old Gitea registry, so
-binaries that still update from Gitea pick it up (D33). After step 9, and
-after asking the user, push the tag to the `gitea` remote and hand over
-again:
+(it doesn't list assets), and that every asset downloads:
 
 ```sh
-git push gitea main vX.Y.Z
-make release-gitea                         # run by the developer, needs GITEA_TOKEN
-curl -fsS https://git.simon-franken.de/api/packages/simonfranken/generic/submarine-latest/latest/VERSION
+for a in submarine_linux_amd64 submarine_linux_arm64 submarine_darwin_amd64 \
+	submarine_darwin_arm64 checksums.txt VERSION; do
+	curl -fsSL -o /dev/null -w "$a %{http_code}\n" \
+		https://github.com/simonfranken/submarine/releases/download/vX.Y.Z/$a
+done
 ```
 
-The last command must print `vX.Y.Z`. Then create a Gitea release for the
-tag with `mcp__gitea__create_release`, its body saying that submarine moved
-to https://github.com/simonfranken/submarine.
+All must print `200`. If anything is missing, report it. Finish with the
+link to the release and the version.
+

@@ -1,27 +1,22 @@
 # Build and publish submarine. Releases are built locally and uploaded as
 # GitHub release assets (see docs/architecture.md#distribution).
 #
-#   make dist                         cross-compile into dist/
-#   make release NOTES=FILE           test, build and publish the tagged HEAD (gh)
-#   GITEA_TOKEN=... make release-gitea  bridge only: the same version to the old Gitea registry
+#   make dist                cross-compile into dist/
+#   make release NOTES=FILE  test, build and publish the tagged HEAD (gh)
 
 # Settings from .env (see .env.template); `make VAR=...` on the command line wins.
 -include .env
-export GITEA_TOKEN GH_TOKEN
+export GH_TOKEN
 
 GITHUB_REPO ?= simonfranken/submarine
 RELEASES    := https://github.com/$(GITHUB_REPO)/releases
-
-GITEA_URL   ?= https://git.simon-franken.de
-GITEA_OWNER ?= simonfranken
-REGISTRY    := $(GITEA_URL)/api/packages/$(GITEA_OWNER)/generic
 
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS  := -s -w -X main.version=$(VERSION)
 PLATFORMS := linux_amd64 linux_arm64 darwin_amd64 darwin_arm64
 BINARIES  := $(addprefix dist/submarine_,$(PLATFORMS))
 
-.PHONY: build test vet dist check-tag release release-gitea clean FORCE
+.PHONY: build test vet dist check-tag release clean FORCE
 
 build:
 	go build -ldflags '$(LDFLAGS)' -o submarine ./cmd/submarine
@@ -62,28 +57,6 @@ release: check-tag
 		--title '$(VERSION)' --notes-file '$(NOTES)' $(BINARIES) dist/checksums.txt dist/VERSION
 	gh release edit '$(VERSION)' --repo '$(GITHUB_REPO)' --draft=false --latest
 	@echo "released $(VERSION): $(RELEASES)/tag/$(VERSION)"
-
-# Bridge release for binaries that still update from Gitea: same version,
-# old registry layout. Refuses until GitHub serves this version, so a binary
-# updated from Gitea finds its release on GitHub. Remove after the bridge.
-release-gitea: check-tag
-	@test -n "$$GITEA_TOKEN" || { echo "GITEA_TOKEN is not set (needs write:package)"; exit 1; }
-	@test "$$(curl -fsSL '$(RELEASES)/latest/download/VERSION' | tr -d '[:space:]')" = '$(VERSION)' || \
-		{ echo "GitHub does not serve $(VERSION) as latest yet: run make release first"; exit 1; }
-	$(MAKE) clean test vet dist VERSION=$(VERSION)
-	@set -e; \
-	for f in $(BINARIES) dist/checksums.txt; do \
-		echo "upload $$(basename $$f)"; \
-		curl -fsS -X PUT -H "Authorization: token $$GITEA_TOKEN" \
-			--upload-file $$f "$(REGISTRY)/submarine/$(VERSION)/$$(basename $$f)" >/dev/null; \
-	done; \
-	echo "point latest at $(VERSION)"; \
-	printf '%s\n' '$(VERSION)' > dist/VERSION; \
-	curl -sS -X DELETE -H "Authorization: token $$GITEA_TOKEN" \
-		"$(GITEA_URL)/api/v1/packages/$(GITEA_OWNER)/generic/submarine-latest/latest" >/dev/null || true; \
-	curl -fsS -X PUT -H "Authorization: token $$GITEA_TOKEN" \
-		--upload-file dist/VERSION "$(REGISTRY)/submarine-latest/latest/VERSION" >/dev/null; \
-	echo "released $(VERSION) to Gitea"
 
 clean:
 	rm -rf dist submarine

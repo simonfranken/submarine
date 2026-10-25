@@ -661,4 +661,6 @@ to. Have the updater try both hosts: permanent code for a one-time move.
 **Consequences.** `SUBMARINE_UPDATE_URL` and `SUBMARINE_BASE_URL` now take
 a releases root, not a registry root. Versions before the bridge exist only
 on Gitea; `SUBMARINE_VERSION=<old>` with the new `install.sh` doesn't find
-them. `release-gitea` and the Gitea settings go once the bridge is out.
+them. The bridge was v0.13.0; `release-gitea` and the Gitea settings were
+removed after it, so a later fix can no longer reach binaries still on
+Gitea's v0.12.0 (they get v0.13.0, then update from GitHub).
