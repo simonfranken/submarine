@@ -32,16 +32,25 @@ func TestNewer(t *testing.T) {
 	}
 }
 
+// registry mimics GitHub releases: every asset URL redirects to storage.
 func registry(t *testing.T, bin, sum string) *Client {
 	t.Helper()
 	mux := http.NewServeMux()
-	mux.HandleFunc("/submarine-latest/latest/VERSION", func(w http.ResponseWriter, _ *http.Request) {
+	redirect := func(from, to string) {
+		mux.HandleFunc(from, func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, to, http.StatusFound)
+		})
+	}
+	redirect("/latest/download/VERSION", "/assets/VERSION")
+	redirect("/download/v0.2.0/checksums.txt", "/assets/checksums.txt")
+	redirect("/download/v0.2.0/submarine_linux_arm64", "/assets/submarine_linux_arm64")
+	mux.HandleFunc("/assets/VERSION", func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte("v0.2.0\n"))
 	})
-	mux.HandleFunc("/submarine/v0.2.0/checksums.txt", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/assets/checksums.txt", func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(sum + "  submarine_linux_arm64\n"))
 	})
-	mux.HandleFunc("/submarine/v0.2.0/submarine_linux_arm64", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/assets/submarine_linux_arm64", func(w http.ResponseWriter, _ *http.Request) {
 		w.Write([]byte(bin))
 	})
 	srv := httptest.NewServer(mux)

@@ -93,7 +93,7 @@ func main() {
 }
 
 // latestRelease returns the version of a newer release, or "" if there is
-// none or the registry can't be reached within a few seconds.
+// none or GitHub can't be reached within a few seconds.
 func latestRelease(ctx context.Context) string {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()

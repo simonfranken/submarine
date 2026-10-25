@@ -22,7 +22,7 @@ go run ./cmd/submarine [dir]  # run on a repository (default: cwd)
 go run ./cmd/submarine --mock # run on mock data
 scripts/make-fixture.sh DIR   # build a test superproject in DIR
 make dist                     # cross-compile into dist/
-GITEA_TOKEN=… make release    # publish a tagged release (outward-facing; run by the developer)
+make release NOTES=FILE       # publish a tagged release to GitHub (outward-facing; run by the developer)
 go vet ./...
 go test ./...
 gofmt -l .                    # must print nothing
@@ -32,7 +32,7 @@ gofmt -l .                    # must print nothing
 
 Use the `release` skill (`/release`, `.claude/skills/release/SKILL.md`): it
 picks the next semver, runs a check, tags and pushes, asks the developer to
-run `make release`, then creates the Gitea release. Never run `make release`
+run `make release`, then verifies the GitHub release. Never run `make release`
 or push tags outside of it.
 
 ## Rules

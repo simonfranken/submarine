@@ -20,12 +20,12 @@ bare commit hash.
 ## Install
 
 ```sh
-curl -fsSL https://git.simon-franken.de/simonfranken/submarine/raw/branch/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/simonfranken/submarine/main/install.sh | sh
 ```
 
 Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
 `~/.local/bin`. Update with `submarine update`. Maintainers publish with
-`GITEA_TOKEN=… make release` (see [architecture](architecture.md#distribution)).
+`make release NOTES=…` (see [architecture](architecture.md#distribution)).
 
 ## Status
 

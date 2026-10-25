@@ -38,7 +38,7 @@ the questions you actually have:
 ## Install
 
 ```sh
-curl -fsSL https://git.simon-franken.de/simonfranken/submarine/raw/branch/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/simonfranken/submarine/main/install.sh | sh
 ```
 
 Installs `sub` and `submarine` (linux/macOS, amd64/arm64) to `~/.local/bin`.

@@ -201,7 +201,8 @@ package so versions stay clean.
 corrupt or partial downloads, not a compromised registry (no signatures).
 The update check is a deliberate, outside-the-provider network use: only
 on `update` and a background check at startup that can be disabled (it
-was once a day; see D27).
+was once a day; see D27). The registry was replaced by GitHub releases in
+D33; local builds, `install.sh` and the pointer file stay.
 
 ## Copy path with `c` via OSC 52
 
@@ -634,3 +635,30 @@ skipped. Contextual palettes that grey out impossible keys: larger, kept for
 later (item 10 of the usability plan).
 **Consequences.** `footer.Keys` drops `help.KeyMap` for `Tools`,
 `HelpGroups` and `LegendKeys`; the footer renders the full help itself.
+
+## D33 — Releases move to GitHub, with one bridge release on Gitea
+
+**Context.** The repository moves from `git.simon-franken.de` (Gitea) to
+`github.com/simonfranken/submarine`. Installed binaries only know the Gitea
+registry (D21), and check it on every start (D27).
+**Decision.**
+- Releases are GitHub releases with the binaries, `checksums.txt` and
+  `VERSION` as assets. GitHub Packages has no generic registry. Clients read
+  `releases/latest/download/VERSION` and `releases/download/<v>/<asset>`:
+  plain redirects, not the API, so the check on every start is not rate
+  limited and needs no token.
+- `make release` creates a draft, uploads all assets, then publishes: the
+  draft takes the role of D21's "pointer last".
+- One bridge version, the first that reads from GitHub, is also published to
+  Gitea in the old layout (`make release-gitea`). Old binaries update to it
+  from Gitea, and from then on update from GitHub. `release-gitea` refuses
+  until GitHub serves the version, so no bridge binary finds GitHub empty.
+- The Gitea registry stays online with the bridge as its latest version, and
+  the Gitea repository is archived, not deleted: a binary started for the
+  first time in months still finds its way over.
+**Alternatives.** Keep Gitea and mirror to GitHub: two places to publish
+to. Have the updater try both hosts: permanent code for a one-time move.
+**Consequences.** `SUBMARINE_UPDATE_URL` and `SUBMARINE_BASE_URL` now take
+a releases root, not a registry root. Versions before the bridge exist only
+on Gitea; `SUBMARINE_VERSION=<old>` with the new `install.sh` doesn't find
+them. `release-gitea` and the Gitea settings go once the bridge is out.

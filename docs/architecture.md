@@ -23,7 +23,7 @@ internal/submodule/git/       provider using the git CLI (reads, fetch, watch)
   switch.go                   Branches, SwitchLoss, Switch (stage the tip, restore, attach or fast-forward the branch)
   gitdir.go                   resolves .git dirs and gitdir: files
 internal/submodule/mock/      fixture provider with artificial latency
-internal/update/              self-update from the package registry; NO UI imports
+internal/update/              self-update from GitHub releases; NO UI imports
 internal/tui/                 Bubble Tea application
   app.go                      root model: layout, message routing, loading
   keys.go                     key bindings (also feed the help view)
@@ -203,17 +203,24 @@ No CI runner: releases are built and published from a developer machine.
 - `make dist` cross-compiles `CGO_ENABLED=0` binaries for linux/darwin ×
   amd64/arm64 into `dist/` plus `checksums.txt`; the version comes from
   `git describe` and is baked in with `-X main.version`.
-- `make release` with `GITEA_TOKEN` set, e.g. in `.env` (copy `.env.template`; token needs `write:package`; HEAD must be a
-  clean `vX.Y.Z` tag) runs tests, builds and uploads to the Gitea generic
-  registry `https://git.simon-franken.de/api/packages/simonfranken/generic`:
-  - `submarine/<version>/submarine_<os>_<arch>` and `checksums.txt`
-  - `submarine-latest/latest/VERSION`, replaced **last**, so a failed upload
-    never advertises a broken version.
+- `make release NOTES=FILE` (needs `gh` logged in, or `GH_TOKEN` in `.env`,
+  see `.env.template`; HEAD must be a clean `vX.Y.Z` tag pushed to GitHub)
+  runs tests, builds and creates the GitHub release `vX.Y.Z` with the notes
+  and the assets `submarine_<os>_<arch>`, `checksums.txt` and `VERSION`. It
+  is created as a **draft** and published last, so `releases/latest` never
+  points at a release with missing assets. Clients read, without the API
+  (plain redirects, no rate limit), below
+  `https://github.com/simonfranken/submarine/releases`:
+  - `latest/download/VERSION`
+  - `download/<version>/submarine_<os>_<arch>` and `checksums.txt`
+- Before the move to GitHub, releases lived in the Gitea generic registry
+  (`git.simon-franken.de/api/packages/simonfranken/generic`, see D33). It
+  stays online for old binaries. `make release-gitea` publishes the bridge
+  version there in the old layout and refuses until GitHub serves it.
 - The `release` skill (`.claude/skills/release/SKILL.md`) drives a release:
   latest tag → next semver from the commits since → check (`vet`, `test`,
   `gofmt`, `make dist`) → tag and push → the developer runs `make release` →
-  the skill verifies the registry's `VERSION` and creates the Gitea release
-  with MCP (notes only; the binaries stay in the registry).
+  the skill verifies that `latest/download/VERSION` serves the new version.
 - `install.sh` (`curl -fsSL …/raw/branch/main/install.sh | sh`) detects
   OS/arch, verifies the sha256, installs `submarine` and a `sub` symlink to
   `~/.local/bin` (`SUBMARINE_INSTALL_DIR`, `SUBMARINE_VERSION`,
@@ -221,7 +228,7 @@ No CI runner: releases are built and published from a developer machine.
 - `submarine update [--check] [--force]` (package `internal/update`) reads
   `VERSION`, downloads the asset for the running platform, verifies the
   checksum and atomically replaces the real executable (symlinks resolved,
-  so `sub` works too). `SUBMARINE_UPDATE_URL` overrides the registry.
+  so `sub` works too). `SUBMARINE_UPDATE_URL` overrides the releases root.
 - On every start the TUI looks for a newer release in the background (3 s
   timeout, no cache, no blocking). `main` passes `tui.WithUpdateCheck` and
   the TUI gets the result as a message; the footer then offers `q quit and

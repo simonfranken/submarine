@@ -1,5 +1,5 @@
-// Package update implements self-update from the Gitea generic package
-// registry. It has no UI imports; the network is only used on explicit calls.
+// Package update implements self-update from GitHub release assets. It has no
+// UI imports; the network is only used on explicit calls.
 package update
 
 import (
@@ -19,16 +19,18 @@ import (
 	"time"
 )
 
-// DefaultBaseURL is the registry root; see docs/architecture.md#distribution.
-const DefaultBaseURL = "https://git.simon-franken.de/api/packages/simonfranken/generic"
+// DefaultBaseURL is the releases root; see docs/architecture.md#distribution.
+// Both paths below it are plain redirects to the assets, not API calls, so
+// they are not rate limited.
+const DefaultBaseURL = "https://github.com/simonfranken/submarine/releases"
 
-// EnvBaseURL overrides the registry root (tests, manual verification).
+// EnvBaseURL overrides the releases root (tests, manual verification).
 const EnvBaseURL = "SUBMARINE_UPDATE_URL"
 
 // maxBinary bounds a download so a bad server cannot fill the disk.
 const maxBinary = 256 << 20
 
-// Client talks to the registry.
+// Client talks to the releases.
 type Client struct {
 	BaseURL string
 	HTTP    *http.Client
@@ -36,7 +38,7 @@ type Client struct {
 	GOARCH  string
 }
 
-// New returns a client for the default (or $SUBMARINE_UPDATE_URL) registry.
+// New returns a client for the default (or $SUBMARINE_UPDATE_URL) releases.
 func New() *Client {
 	base := os.Getenv(EnvBaseURL)
 	if base == "" {
@@ -52,13 +54,13 @@ func New() *Client {
 
 // Latest returns the newest released version, e.g. "v0.2.0".
 func (c *Client) Latest(ctx context.Context) (string, error) {
-	b, err := c.get(ctx, c.BaseURL+"/submarine-latest/latest/VERSION", 1<<10)
+	b, err := c.get(ctx, c.BaseURL+"/latest/download/VERSION", 1<<10)
 	if err != nil {
 		return "", err
 	}
 	v := strings.TrimSpace(string(b))
 	if _, ok := parse(v); !ok {
-		return "", fmt.Errorf("registry returned an invalid version %q", v)
+		return "", fmt.Errorf("releases returned an invalid version %q", v)
 	}
 	return v, nil
 }
@@ -120,7 +122,7 @@ func (c *Client) Install(ctx context.Context, version string) (string, error) {
 // InstallTo is Install with an explicit target path.
 func (c *Client) InstallTo(ctx context.Context, version, target string) error {
 	asset := fmt.Sprintf("submarine_%s_%s", c.GOOS, c.GOARCH)
-	base := c.BaseURL + "/submarine/" + version + "/"
+	base := c.BaseURL + "/download/" + version + "/"
 
 	sums, err := c.get(ctx, base+"checksums.txt", 1<<20)
 	if err != nil {

@@ -1,14 +1,14 @@
 #!/bin/sh
 # Install submarine (and the `sub` alias).
-#   curl -fsSL https://git.simon-franken.de/simonfranken/submarine/raw/branch/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/simonfranken/submarine/main/install.sh | sh
 #
 # Environment:
 #   SUBMARINE_VERSION      install this version (default: latest)
 #   SUBMARINE_INSTALL_DIR  target directory (default: ~/.local/bin)
-#   SUBMARINE_BASE_URL     registry root (default: the Gitea generic registry)
+#   SUBMARINE_BASE_URL     releases root (default: the GitHub releases)
 set -eu
 
-base="${SUBMARINE_BASE_URL:-https://git.simon-franken.de/api/packages/simonfranken/generic}"
+base="${SUBMARINE_BASE_URL:-https://github.com/simonfranken/submarine/releases}"
 dir="${SUBMARINE_INSTALL_DIR:-$HOME/.local/bin}"
 
 die() { echo "install: $*" >&2; exit 1; }
@@ -35,7 +35,7 @@ fi
 
 version="${SUBMARINE_VERSION:-}"
 if [ -z "$version" ]; then
-	version="$(curl -fsSL "$base/submarine-latest/latest/VERSION")" || die "cannot determine the latest version"
+	version="$(curl -fsSL "$base/latest/download/VERSION")" || die "cannot determine the latest version"
 	version="$(printf '%s' "$version" | tr -d '[:space:]')"
 fi
 case "$version" in
@@ -48,8 +48,8 @@ tmp="$(mktemp -d)"
 trap 'rm -rf "$tmp"' EXIT INT TERM
 
 echo "Installing submarine $version ($os/$arch) to $dir"
-curl -fsSL -o "$tmp/$asset" "$base/submarine/$version/$asset" || die "download failed: $asset"
-curl -fsSL -o "$tmp/checksums.txt" "$base/submarine/$version/checksums.txt" || die "download failed: checksums.txt"
+curl -fsSL -o "$tmp/$asset" "$base/download/$version/$asset" || die "download failed: $asset"
+curl -fsSL -o "$tmp/checksums.txt" "$base/download/$version/checksums.txt" || die "download failed: checksums.txt"
 
 want="$(awk -v a="$asset" '$2 == a || $2 == "*" a { print $1 }' "$tmp/checksums.txt")"
 [ -n "$want" ] || die "no checksum for $asset"
