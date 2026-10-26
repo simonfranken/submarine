@@ -106,7 +106,8 @@ commit hashes. It doesn't answer the questions users actually have:
 
 - **F30** The header shows the superproject path, its branch and
   ahead/behind, its own state word (**F25**), the operation in progress
-  (`merging feat`, with `ready to commit` when no conflict is left), the number of submodules, a count per issue kind (most
+  (`merging feat`, with `ready to commit` when nothing in its index is in
+  conflict any more), the number of submodules, a count per issue kind (most
   severe first), staged pins, how many are still loading, and the time since
   the last fetch.
 - **F31** The footer shows key hints; `?` toggles the full help. It

@@ -65,12 +65,11 @@ func View(t theme.Theme, repo *submodule.Repo, fetch Fetch, spinner string, widt
 		}
 	})
 
-	// an operation in progress (merge, rebase, …), and when no pin conflict
-	// is left, that it can be finished
+	// an operation in progress (merge, rebase, …), and when no path of the
+	// superproject's index is in conflict any more, that it can be finished
 	if repo.Operation != "" {
 		left += seg(t.Text, "  ") + seg(t.Warn, repo.Operation)
-		rootConflict := repo.Root != nil && (repo.Root.Status == nil || repo.Root.Status.Worktree == submodule.WorktreeConflict)
-		if loading == 0 && perKind[submodule.IssuePinConflict] == 0 && !rootConflict {
+		if repo.Root != nil && repo.Root.Status != nil && repo.Root.Status.Unmerged == 0 {
 			left += seg(t.Muted, " · ready to commit")
 		}
 	}

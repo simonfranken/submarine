@@ -116,10 +116,19 @@ func (k keyMap) HelpGroups() []footer.Group {
 	return []footer.Group{
 		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Toggle, k.CollapseAll, k.ExpandAll}},
 		{Title: "Jump", Keys: []key.Binding{k.Home, k.End, k.PageUp, k.PageDown}},
-		{Title: "Selected submodule", Keys: append(k.Submodule(), k.Resolve)},
+		{Title: "Selected submodule", Keys: k.helpSubmodule()},
 		{Title: "All submodules", Keys: []key.Binding{k.Fetch, k.Reload, k.Filter, k.Issues}},
 		{Title: "App", Keys: append([]key.Binding{help, esc, k.Quit}, k.fullUpdate()...)},
 	}
+}
+
+// helpSubmodule is the full help's column of submodule keys: all of them,
+// m too, whatever is selected.
+func (k keyMap) helpSubmodule() []key.Binding {
+	if k.conflict {
+		return k.Submodule() // m is first already
+	}
+	return append(k.Submodule(), k.Resolve)
 }
 
 // LegendKeys returns the column next to the legend, the help's last page;

@@ -260,4 +260,8 @@ type Status struct {
 	// PinConflict is set while the parent has a merge conflict on the pin;
 	// Pinned is then ours (theirs if ours removed the submodule).
 	PinConflict *PinConflict
+	// Unmerged counts the paths with a merge conflict in the index, pins
+	// included; only for the superproject, whose merge can be committed
+	// when it is 0.
+	Unmerged int
 }

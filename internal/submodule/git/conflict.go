@@ -14,8 +14,8 @@ import (
 
 // operation describes what is in progress in the repository at dir: the
 // name of HEAD's side, the name of the side being applied, and the words
-// for the operation ("merging feat"); all "" if nothing is in progress
-// except ours, which is always set.
+// for the operation ("merging feat"); all "" if nothing is in progress.
+// Names are looked up only then: Tree calls this on every load.
 func operation(ctx context.Context, dir string) (ours, theirs, op string) {
 	gitDir, _, err := gitDirs(dir)
 	if err != nil {
@@ -43,23 +43,25 @@ func operation(ctx context.Context, dir string) (ours, theirs, op string) {
 		return ours, theirs, "rebasing " + theirs
 	}
 
-	if b, ok, _ := try(ctx, dir, "symbolic-ref", "--short", "-q", "HEAD"); ok && b != "" {
-		ours = b
-	} else {
-		ours = nameOf(ctx, dir, "HEAD")
-	}
 	for _, o := range []struct{ head, verb string }{
 		{"MERGE_HEAD", "merging"},
 		{"CHERRY_PICK_HEAD", "cherry-picking"},
 		{"REVERT_HEAD", "reverting"},
 	} {
-		if sha := read(o.head); sha != "" {
-			sha, _, _ = strings.Cut(sha, "\n") // an octopus merge lists several
-			theirs = nameOf(ctx, dir, sha)
-			return ours, theirs, o.verb + " " + theirs
+		sha := read(o.head)
+		if sha == "" {
+			continue
 		}
+		if b, ok, _ := try(ctx, dir, "symbolic-ref", "--short", "-q", "HEAD"); ok && b != "" {
+			ours = b
+		} else {
+			ours = nameOf(ctx, dir, "HEAD")
+		}
+		sha, _, _ = strings.Cut(sha, "\n") // an octopus merge lists several
+		theirs = nameOf(ctx, dir, sha)
+		return ours, theirs, o.verb + " " + theirs
 	}
-	return ours, "", ""
+	return "", "", ""
 }
 
 // nameOf names a commit of the repository at dir after a local branch

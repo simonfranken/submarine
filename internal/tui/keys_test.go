@@ -26,3 +26,17 @@ func TestResolveLeadsThePaletteOnlyInAConflict(t *testing.T) {
 		}
 	}
 }
+
+func TestHelpListsResolveOnce(t *testing.T) {
+	for _, conflict := range []bool{false, true} {
+		n := 0
+		for _, b := range defaultKeys().forSelection(false, conflict).helpSubmodule() {
+			if b.Help().Key == "m" {
+				n++
+			}
+		}
+		if n != 1 {
+			t.Errorf("conflict %v: m listed %d times", conflict, n)
+		}
+	}
+}

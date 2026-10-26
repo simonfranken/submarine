@@ -153,9 +153,13 @@ that removed the submodule has no stage. `Status.PinConflict` describes it
   changes the submodule least; moving on to the branch's tip is a separate
   step (`u`).
 - **Parents.** The superproject's own changes leave out the conflicted
-  gitlink (like every submodule); its row shows it. A nested parent lists
-  it as a conflicted file. `Repo.Operation` names the operation in
-  progress in the superproject (`merging feat`).
+  gitlink (like every submodule); its row shows it. A gitlink without a
+  row stays a conflicted file of the superproject (`conflict`): a side
+  removed the submodule together with its `.gitmodules` entry. A nested
+  parent lists it as a conflicted file. `Repo.Operation` names the
+  operation in progress in the superproject (`merging feat`); the sides
+  are only named while there is one. The superproject's `Status.Unmerged`
+  counts the paths of its index in conflict, pins included.
 - A restore of the submodule is refused while the conflict lasts. A
   restore of a parent resets the gitlink to ours, so its loss check
   counts the submodule as going to ours.

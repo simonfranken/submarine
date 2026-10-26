@@ -286,8 +286,8 @@ branch and state stay at the left. If the line is too narrow it is cut with
 
 During a merge, rebase, cherry-pick or revert of the superproject,
 `operation` names it after the state word, in yellow (`merging feat`). Once
-everything is loaded, no pin conflict is left and the superproject has no
-conflicted file, it continues `· ready to commit` (muted).
+no path of the superproject's index is in conflict any more (pins
+included, `Status.Unmerged`), it continues `· ready to commit` (muted).
 
 Issue counts are ordered by severity (pin conflict, unpushed, conflict,
 missing, off pin, changed, off target), each in its level color. Zero counts are omitted. `n loading`

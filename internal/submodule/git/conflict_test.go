@@ -199,3 +199,43 @@ func TestResolveRemove(t *testing.T) {
 		t.Errorf("index still has %q", got)
 	}
 }
+
+// A side that removed the submodule with its .gitmodules entry leaves a
+// conflicted gitlink without a row: the superproject shows it, and it
+// counts as unmerged.
+func TestPinConflictWithoutRow(t *testing.T) {
+	_, _, super := conflictFixture(t)
+	ctx := context.Background()
+	git := func(args ...string) {
+		t.Helper()
+		out(t, super, append([]string{"-c", "user.name=A", "-c", "user.email=a@b"}, args...)...)
+	}
+	git("merge", "--abort")
+	git("rm", "-q", "-f", "libs/beta")
+	git("commit", "-q", "-m", "Remove beta")
+	exec.Command("git", "-C", super, "-c", "user.name=A", "-c", "user.email=a@b", "merge", "feat").Run() // stops at the conflicts
+
+	p, err := New(super)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := p.Tree(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	submodule.Walk(repo.Submodules, func(s *submodule.Submodule) {
+		if s.Path == "libs/beta" {
+			t.Error("libs/beta still has a row")
+		}
+	})
+	root, err := p.Status(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root.Unmerged != 3 {
+		t.Errorf("Unmerged = %d, want 3 (alpha, gamma, beta)", root.Unmerged)
+	}
+	if root.Worktree != submodule.WorktreeConflict || root.Changes == nil || len(root.Changes.Files) != 1 || root.Changes.Files[0].Path != "libs/beta" {
+		t.Errorf("superproject: worktree %v, changes %+v; want the conflict on libs/beta only", root.Worktree, root.Changes)
+	}
+}

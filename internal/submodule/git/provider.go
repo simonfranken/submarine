@@ -315,9 +315,21 @@ func (p *Provider) rootStatus(ctx context.Context) (*submodule.Status, error) {
 		return nil, err
 	}
 	entries := parseStatus(out)
-	// a leftover of --ignore-submodules=all in older git versions would
-	// report the submodules the rows already show
-	entries = slices.DeleteFunc(entries, func(e entry) bool { return e.submodule })
+	for _, e := range entries {
+		if e.kind == submodule.ChangeConflicted {
+			st.Unmerged++
+		}
+	}
+	// the rows show the submodules (a leftover of --ignore-submodules=all
+	// in older git versions reports them too), but a conflicted gitlink
+	// without a row stays: e.g. one side removed the submodule with its
+	// .gitmodules entry
+	p.mu.RLock()
+	entries = slices.DeleteFunc(entries, func(e entry) bool {
+		_, row := p.mods[e.path]
+		return e.submodule && (row || e.kind != submodule.ChangeConflicted)
+	})
+	p.mu.RUnlock()
 	st.Worktree = worktreeOf(entries)
 	if st.Changes, err = changes(ctx, in.dir, entries); err != nil {
 		return nil, err
