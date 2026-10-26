@@ -142,13 +142,40 @@ func TestSpine(t *testing.T) {
 			nodes: []string{"p:pin"},
 		},
 		{
+			name: "pin conflict, diverged: theirs forks from the base, tip left out",
+			st: Status{Pinned: c("o"), CheckedOut: c("o"), Tip: c("t"), Pin: PinInfo{Behind: 4},
+				PinConflict: &PinConflict{Ours: ConflictSide{SHA: "o"}, Theirs: ConflictSide{SHA: "x", Commit: c("x")},
+					Drift: Distance{Ahead: 1, Behind: 2}, MergeBase: c("b")}},
+			nodes: []string{"x:theirs", "o:ours,you", "b:base"},
+			links: []Link{{Above: 1}, {Above: 2}},
+		},
+		{
+			name: "pin conflict, theirs contains ours",
+			st: Status{Pinned: c("o"), CheckedOut: c("o"),
+				PinConflict: &PinConflict{Ours: ConflictSide{SHA: "o"}, Theirs: ConflictSide{SHA: "x", Commit: c("x")}, Drift: Distance{Ahead: 3}}},
+			nodes: []string{"x:theirs", "o:ours,you"},
+			links: []Link{{Above: 3}},
+		},
+		{
+			name: "pin conflict, theirs not fetched",
+			st: Status{Pinned: c("o"), CheckedOut: c("o"),
+				PinConflict: &PinConflict{Ours: ConflictSide{SHA: "o"}, Theirs: ConflictSide{SHA: "x"}}},
+			nodes: []string{"o:ours,you"},
+		},
+		{
+			name: "pin conflict, ours removed the submodule",
+			st: Status{Pinned: c("x"), CheckedOut: c("x"),
+				PinConflict: &PinConflict{Theirs: ConflictSide{SHA: "x", Commit: c("x")}}},
+			nodes: []string{"x:theirs,you"},
+		},
+		{
 			name:  "superproject",
 			st:    Status{Root: true, Pinned: c("h"), CheckedOut: c("h"), Tip: c("t"), Pin: PinInfo{Behind: 2}},
 			nodes: []string{"t:tip", "h:head"},
 			links: []Link{{Above: 2}},
 		},
 	}
-	words := map[Role]string{RolePin: "pin", RoleStaged: "staged", RoleHead: "head", RoleTip: "tip", RoleTarget: "target", RoleYou: "you", RoleBase: "base"}
+	words := map[Role]string{RolePin: "pin", RoleStaged: "staged", RoleHead: "head", RoleTip: "tip", RoleTarget: "target", RoleYou: "you", RoleBase: "base", RoleOurs: "ours", RoleTheirs: "theirs"}
 	for _, tt := range tests {
 		var nodes []string
 		var links []Link

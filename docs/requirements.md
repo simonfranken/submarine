@@ -93,10 +93,18 @@ commit hashes. It doesn't answer the questions users actually have:
   of pin and you, a summary of all submodules instead of Children).
   See [state-model.md](state-model.md#superproject).
 
+- **F26** A merge conflict on a pin (both sides of a merge, rebase,
+  cherry-pick or revert moved it) is shown as `pin conflict` (Danger), not
+  as a staged or off pin. The detail pane names both sides after their
+  branches, shows where each is and how they relate, and lists the commits
+  that already contain both. See
+  [state-model.md](state-model.md#pin-conflicts).
+
 ### Header and footer
 
 - **F30** The header shows the superproject path, its branch and
-  ahead/behind, its own state word (**F25**), the number of submodules, a count per issue kind (most
+  ahead/behind, its own state word (**F25**), the operation in progress
+  (`merging feat`, with `ready to commit` when no conflict is left), the number of submodules, a count per issue kind (most
   severe first), staged pins, how many are still loading, and the time since
   the last fetch.
 - **F31** The footer shows key hints; `?` toggles the full help. It

@@ -17,6 +17,9 @@ type Repo struct {
 	Behind     int
 	Root       *Submodule // the superproject as a selectable node; Path is "", no Children
 	Submodules []*Submodule
+	// Operation is the operation in progress in the superproject, e.g.
+	// "merging feat"; "" if none.
+	Operation string
 }
 
 // Submodule is one node in the submodule tree.
@@ -189,6 +192,46 @@ type Distance struct{ Ahead, Behind int }
 // diverged or the base is unknown.
 type Bases struct{ Tip, Checkout, Committed, Target *Commit }
 
+// PinConflict is a merge conflict on the pin: the parent's index records the
+// two sides of a merge (or rebase, cherry-pick, revert) instead of one pin.
+type PinConflict struct {
+	Base   *Commit      // the pin both sides started from; nil if unknown or both added the submodule
+	Ours   ConflictSide // HEAD's side of the parent
+	Theirs ConflictSide // the side being merged in
+	// Drift compares theirs with ours like Drift: Ahead = commits only theirs
+	// has. MergeBase is where they split, if both have commits of their own.
+	Drift     Distance
+	MergeBase *Commit
+	// Candidates are commits that contain both sides, best first; empty if
+	// a side is missing or nothing contains both.
+	Candidates []Candidate
+}
+
+// ConflictSide is one side of a pin conflict.
+type ConflictSide struct {
+	Name   string  // what the parent calls it, e.g. "main", "feat/x", or a short SHA
+	SHA    string  // full SHA; "" if this side removed the submodule
+	Commit *Commit // nil if removed or not fetched
+	Pin    PinInfo // the ref the side resolves to, like the pin; zero if not fetched
+}
+
+// Deleted reports whether this side removed the submodule.
+func (c ConflictSide) Deleted() bool { return c.SHA == "" }
+
+// Candidate is a commit that contains both sides of a pin conflict.
+type Candidate struct {
+	SHA    string // full SHA
+	Commit *Commit
+	// Ref is the remote branch it is on, with Behind commits after it; ""
+	// for the checkout or a side that contains the other.
+	Ref    string
+	Behind int
+	// Checkout marks the commit checked out in the submodule; Side is "ours"
+	// or "theirs" if it is a side that contains the other.
+	Checkout bool
+	Side     string
+}
+
 // Status is the full state of one submodule.
 type Status struct {
 	Root       bool // the superproject: the "pin" is its HEAD
@@ -214,4 +257,7 @@ type Status struct {
 	Bases       Bases
 	Changes     *Changes  // nil if the worktree is clean or the details are unknown
 	FetchedAt   time.Time // last fetch of the submodule; zero if never
+	// PinConflict is set while the parent has a merge conflict on the pin;
+	// Pinned is then ours (theirs if ours removed the submodule).
+	PinConflict *PinConflict
 }

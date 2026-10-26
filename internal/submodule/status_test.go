@@ -16,6 +16,7 @@ func kinds(is []Issue) []IssueKind {
 
 func TestIssues(t *testing.T) {
 	pushed := PinInfo{Pushed: true}
+	conflict := &PinConflict{Ours: ConflictSide{Name: "main", SHA: "a"}, Theirs: ConflictSide{Name: "feat", SHA: "b"}}
 	tests := []struct {
 		name string
 		s    *Status
@@ -35,10 +36,29 @@ func TestIssues(t *testing.T) {
 		{"on the target, ahead of nothing else", &Status{Pin: PinInfo{Pushed: true, Ref: "origin/main", Target: "origin/main", Behind: 4}}, nil},
 		{"no target, no judgement", &Status{Pin: PinInfo{Pushed: true, Ref: "origin/feat", Source: RefFromContains}}, nil},
 		{"the superproject has no target", &Status{Root: true, Pin: PinInfo{Pushed: true, Ref: "origin/feat", Target: "origin/main"}}, nil},
+		{"pin conflict hides what compares with the pin", &Status{PinConflict: conflict, Checkout: CheckoutDiffers, Pin: PinInfo{Ref: "origin/feat", Target: "origin/main"}}, []IssueKind{IssuePinConflict}},
+		{"pin conflict keeps the checkout's issues", &Status{PinConflict: conflict, Worktree: WorktreeModified}, []IssueKind{IssuePinConflict, IssueChanged}},
+		{"pin conflict on a missing submodule", &Status{PinConflict: conflict, Presence: NotInitialized}, []IssueKind{IssuePinConflict, IssueMissing}},
 	}
 	for _, tt := range tests {
 		if got := kinds(tt.s.Issues()); !slices.Equal(got, tt.want) {
 			t.Errorf("%s: Issues() = %v, want %v", tt.name, got, tt.want)
+		}
+	}
+}
+
+func TestConflictText(t *testing.T) {
+	for _, c := range []struct {
+		ours, theirs string
+		want         string
+	}{
+		{"a", "b", "main and feat both moved the pin"},
+		{"", "b", "main removed the submodule, feat moved its pin"},
+		{"a", "", "feat removed the submodule, main moved its pin"},
+	} {
+		s := &Status{PinConflict: &PinConflict{Ours: ConflictSide{Name: "main", SHA: c.ours}, Theirs: ConflictSide{Name: "feat", SHA: c.theirs}}}
+		if got := s.Issues()[0].Detail; got != c.want {
+			t.Errorf("%q/%q: %q, want %q", c.ours, c.theirs, got, c.want)
 		}
 	}
 }

@@ -81,6 +81,8 @@ func (p *Provider) Tree(ctx context.Context) (*submodule.Repo, error) {
 		repo.Ahead, repo.Behind, _ = parseLeftRight(out)
 	}
 
+	_, _, repo.Operation = operation(ctx, p.root)
+
 	repo.Root = &submodule.Submodule{Name: filepath.Base(p.root), Path: ""}
 	if remote, err := remoteName(ctx, p.root); err != nil {
 		return nil, err
@@ -157,21 +159,24 @@ func (p *Provider) Status(ctx context.Context, path string) (*submodule.Status, 
 }
 
 func status(ctx context.Context, in info) (*submodule.Status, error) {
-	// pin: index gitlink, compared with HEAD
-	out, err := run(ctx, in.superDir, "ls-files", "-s", "--", in.relPath)
+	// pin: index gitlink, compared with HEAD; ours during a conflict
+	stages, err := indexStages(ctx, in)
 	if err != nil {
 		return nil, err
 	}
-	pin := parseGitlink(out)
+	pin := stages.pin()
 	if pin == "" {
 		return nil, errors.New("listed in .gitmodules, but has no gitlink in the superproject index (stale entry?)")
 	}
-	out, _, err = try(ctx, in.superDir, "ls-tree", "HEAD", "--", in.relPath)
+	out, _, err := try(ctx, in.superDir, "ls-tree", "HEAD", "--", in.relPath)
 	if err != nil {
 		return nil, err
 	}
 	committed := parseGitlink(out)
-	st := &submodule.Status{PinStaged: committed != pin}
+	st := &submodule.Status{PinStaged: !stages.conflicted() && committed != pin}
+	if stages.conflicted() {
+		st.PinConflict = conflictSides(ctx, in.superDir, stages)
+	}
 
 	// presence
 	if _, err := os.Stat(in.dir); errors.Is(err, fs.ErrNotExist) {
@@ -215,6 +220,25 @@ func status(ctx context.Context, in info) (*submodule.Status, error) {
 		return nil, err
 	}
 
+	if st.PinConflict != nil {
+		// the side the pin stands for may not be fetched: then only the
+		// checkout is known
+		if _, ok, err := try(ctx, in.dir, "cat-file", "-e", pin+"^{commit}"); err != nil {
+			return nil, err
+		} else if ok {
+			err = pinState(ctx, in, st, pin, head, branch, nil)
+		} else {
+			st.Pinned = &submodule.Commit{SHA: pin[:min(7, len(pin))]}
+			st.CheckedOut, err = commit(ctx, in.dir, head)
+		}
+		if err != nil {
+			return nil, err
+		}
+		if err := conflictState(ctx, in, st, stages[1], head, branch); err != nil {
+			return nil, err
+		}
+		return st, nil
+	}
 	if err := pinState(ctx, in, st, pin, head, branch, nil); err != nil {
 		return nil, err
 	}

@@ -38,6 +38,7 @@ in several at once.
 | `Committed`, `CommittedDrift` | With a staged pin: the pin in the superproject's HEAD (nil if it is not on disk or the submodule was only added) and how it compares with the staged pin, like `Drift` |
 | `Changes` | Changed files of the worktree (nil if clean), see below |
 | `FetchedAt` | Last fetch of the submodule (`FETCH_HEAD` mtime); zero if never |
+| `PinConflict` | Set while the parent has a merge conflict on the pin, see [Pin conflicts](#pin-conflicts); nil otherwise |
 
 `Submodule.FetchErr` is set if the application's last fetch of the
 submodule failed. Like loading errors, it is not an issue kind: a failed
@@ -72,6 +73,7 @@ truth for what counts as a problem.
 
 | Issue (word) | Combines | Level |
 |---|---|---|
+| `pin conflict` | The parent has a merge conflict on the pin: both sides moved it (or one removed the submodule), see [Pin conflicts](#pin-conflicts) | Danger |
 | `unpushed` | Pin not reachable from any remote ref | Danger |
 | `conflict` | Merge conflict in the worktree | Danger |
 | `missing` | Not initialized; directory missing | Warn |
@@ -83,8 +85,11 @@ Rules:
 
 - If the submodule is **missing**, that is its only issue (nothing else can
   be determined).
-- Issues are returned **most severe first**: unpushed, conflict, off pin,
-  changed, off target.
+- Issues are returned **most severe first**: pin conflict, unpushed,
+  conflict, off pin, changed, off target.
+- During a **pin conflict** only the issues of the checkout itself follow
+  it (`missing`, or `conflict` / `changed`): `unpushed`, `off pin` and
+  `off target` compare with a pin that is not chosen yet.
 - An unpushed pin is not also `off target`: it has the worse issue.
 - `off target` does not depend on the superproject's branch: a feature
   branch of the superproject that pins feature-branch commits shows it too.
@@ -112,6 +117,48 @@ per level (`Hidden{Danger, Warn, Info}`). A collapsed submodule shows them as `�
 per level, red first, then yellow, then blue, so a danger can never hide inside a
 collapsed subtree and a warning is never mistaken for one.
 A descendant whose load failed (`error`) counts as one danger.
+
+## Pin conflicts
+
+During a merge (also a rebase, cherry-pick or revert) in which both sides
+moved a submodule's pin, git can't pick one (unless one contains the
+other) and records the gitlink as three index stages instead of one: 1 the
+base, 2 ours (HEAD's side), 3 theirs (the side being merged in). A side
+that removed the submodule has no stage. `Status.PinConflict` describes it
+(D34):
+
+| Field | Meaning |
+|---|---|
+| `Ours`, `Theirs` | `ConflictSide`: name, full SHA ("" if the side removed the submodule), commit (nil if not fetched), and its `PinInfo`, resolved [like the pin](#resolving-a-pin-to-a-ref) |
+| `Base` | The pin both sides started from (stage 1); SHA only if it is not fetched |
+| `Drift`, `MergeBase` | Theirs compared with ours like `Drift` (`Ahead` = only theirs has), and where they split if both have commits of their own |
+| `Candidates` | Commits that contain both sides, best first |
+
+- **The pin is ours** while the conflict lasts (theirs if ours removed the
+  submodule): `Pinned`, the ref, the tip and the checkout comparison refer
+  to it. `PinStaged` is false: ours is HEAD's gitlink.
+- **Names.** The sides are named after branches, not "ours" and "theirs":
+  ours is the parent's branch, theirs the branch of `MERGE_HEAD`
+  (`CHERRY_PICK_HEAD`, `REVERT_HEAD`), named with `name-rev` (local branch,
+  else remote branch, else short SHA). During a rebase git swaps the roles:
+  ours is the branch rebased onto (`rebase-merge/onto`), theirs the branch
+  being rebased (`head-name`).
+- **Candidates.** If one side contains the other, that side. Otherwise, for
+  each remote branch containing both (at most 8), the **oldest commit on it
+  that contains both**, usually the merge of one side into the branch:
+  the first commit of `rev-list --topo-order --reverse --ancestry-path
+  <ours>..<branch>` that is also in `--ancestry-path <theirs>..<branch>`.
+  Ordered by the commits after it on its branch, then by name. Last the
+  checkout, if it contains both (merged in the submodule). The oldest commit
+  changes the submodule least; moving on to the branch's tip is a separate
+  step (`u`).
+- **Parents.** The superproject's own changes leave out the conflicted
+  gitlink (like every submodule); its row shows it. A nested parent lists
+  it as a conflicted file. `Repo.Operation` names the operation in
+  progress in the superproject (`merging feat`).
+- A restore of the submodule is refused while the conflict lasts. A
+  restore of a parent resets the gitlink to ours, so its loss check
+  counts the submodule as going to ours.
 
 ## Superproject
 
@@ -192,6 +239,7 @@ are local; `<pin>` is the index gitlink.
 | `TargetTip`, `TargetDrift` | `log -1` of the target and `rev-list --left-right --count <target>...<pin>`, only if the ref is not the target |
 | `Bases` | `merge-base <pin> <ref>` / `<head>` / `<committed>` / `<target>`, only when diverged; then `log -1` of it |
 | `Committed`, `CommittedDrift` | `ls-tree HEAD` gitlink, if it differs from the pin and exists locally; `rev-list --left-right --count <committed>...<pin>` |
+| `PinConflict` | parent: `ls-files -s` has stages 1–3 and no 0; side names from `symbolic-ref`, `MERGE_HEAD` (…) and `name-rev`. Submodule: `cat-file -e` per side, the pin rules per side, `rev-list --left-right --count <theirs>...<ours>`, `merge-base`, candidates as above |
 
 Details:
 

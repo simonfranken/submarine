@@ -41,9 +41,10 @@ func (p *Provider) Tree(ctx context.Context) (*submodule.Repo, error) {
 	defer p.mu.Unlock()
 	p.statuses = map[string]*submodule.Status{}
 	repo := &submodule.Repo{
-		Path:   "~/coding/my_project",
-		Branch: "main",
-		Behind: 2,
+		Path:      "~/coding/my_project",
+		Branch:    "main",
+		Behind:    2,
+		Operation: "merging feat/v2",
 	}
 	repo.Root = &submodule.Submodule{Name: "my_project", URL: "git@github.com:acme/my_project.git"}
 	p.statuses[""] = rootStatus()
@@ -243,6 +244,26 @@ func fixture() []node {
 	crypto.Committed = commit("e0f1a2b", "Release v1.4.1", "ben", 40*24*time.Hour)
 	crypto.CommittedDrift = submodule.Distance{Behind: 3}
 
+	// libs/parser: both sides of the merge moved the pin; main has merged
+	// the feature since
+	parserOurs := commit("3c4d5e6", "Faster tokenizer", "dana", 2*24*time.Hour)
+	parserTheirs := commit("7a8b9c0", "Parse v2 syntax", "eve", 3*24*time.Hour)
+	parser := inSync("origin/main", parserOurs)
+	parser.PinConflict = &submodule.PinConflict{
+		Base: commit("1b2c3d4", "Release 2.0.0", "dana", 9*24*time.Hour),
+		Ours: submodule.ConflictSide{Name: "main", SHA: "3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d", Commit: parserOurs,
+			Pin: submodule.PinInfo{Ref: "origin/main", Target: "origin/main", Behind: 3, Pushed: true}},
+		Theirs: submodule.ConflictSide{Name: "feat/v2", SHA: "7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b", Commit: parserTheirs,
+			Pin: submodule.PinInfo{Ref: "origin/feat/v2", Target: "origin/main", Pushed: true, Source: submodule.RefFromContains}},
+		Drift:     submodule.Distance{Ahead: 4, Behind: 2},
+		MergeBase: commit("1b2c3d4", "Release 2.0.0", "dana", 9*24*time.Hour),
+		Candidates: []submodule.Candidate{{
+			SHA: "d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3", Commit: commit("d4e5f6a", "Merge feat/v2", "dana", 1*24*time.Hour),
+			Ref: "origin/main", Behind: 2,
+		}},
+	}
+	parser.Pin.Behind = 3
+
 	zlib := inSync("v1.3.1", commit("51f2c3e", "zlib 1.3.1", "madler", 300*24*time.Hour))
 	zlib.Pin.Source = submodule.RefFromTag
 	zlib.Checkout = submodule.CheckoutDetached
@@ -292,6 +313,7 @@ func fixture() []node {
 			Tip:        httpTip,
 		}},
 		{relPath: "libs/crypto", status: crypto},
+		{relPath: "libs/parser", status: parser},
 		{relPath: "third_party/zlib", status: zlib},
 	}
 }

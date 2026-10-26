@@ -664,3 +664,31 @@ on Gitea; `SUBMARINE_VERSION=<old>` with the new `install.sh` doesn't find
 them. The bridge was v0.13.0; `release-gitea` and the Gitea settings were
 removed after it, so a later fix can no longer reach binaries still on
 Gitea's v0.12.0 (they get v0.13.0, then update from GitHub).
+
+## D34 — Pin conflicts are a state of their own
+
+**Context.** A merge in which both sides moved a submodule's pin leaves
+the gitlink as three index stages (base, ours, theirs). IDEs show two
+opaque SHAs at best. submarine read the first stage, the base, as the pin:
+the row said `off pin ●` with "staged pin moves back", and `x` would have
+restored the submodule to the base.
+**Decision.**
+- A new issue, `pin conflict` (Danger, first). Only the checkout's own
+  issues follow it; those that compare with the pin wait until one is
+  chosen.
+- Ours stands in for the pin while the conflict lasts, so the tree, the
+  spine and the loss checks keep working; theirs takes the tip's place on
+  the spine.
+- The sides are named after branches (`main`, `feat`), not ours/theirs,
+  which a rebase swaps.
+- Candidates are the commits that already contain both sides: for each
+  remote branch with both, the oldest such commit, usually the merge of one
+  into the branch. It changes the submodule least and is pushed; moving on
+  to the tip is `u`, a separate decision.
+- A restore of the submodule is refused during the conflict: there is no
+  pin to restore to.
+**Alternatives.** The tip of each branch with both: also pulls in
+unrelated commits. Merging in the submodule from submarine: creates
+commits, which submarine leaves to the user (see actions.md).
+**Consequences.** One `name-rev` per side, and two `rev-list
+--ancestry-path` per branch with both sides, only during a conflict.

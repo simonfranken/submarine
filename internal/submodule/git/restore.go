@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -119,6 +120,13 @@ func (p *Provider) restoreTarget(ctx context.Context, path string, to submodule.
 // or HEAD (committed). A hard restore of a submodule that was added but not
 // committed yet uses the index: there is no staged pin to drop.
 func pinOf(ctx context.Context, in info, to submodule.RestoreTarget) (string, error) {
+	st, err := indexStages(ctx, in)
+	if err != nil {
+		return "", err
+	}
+	if st.conflicted() {
+		return "", errPinConflict
+	}
 	if to.Committed() {
 		out, _, err := try(ctx, in.superDir, "ls-tree", "HEAD", "--", in.relPath)
 		if err != nil {
@@ -131,15 +139,23 @@ func pinOf(ctx context.Context, in info, to submodule.RestoreTarget) (string, er
 			return "", errors.New("has no committed pin (added, but not committed yet)")
 		}
 	}
-	out, err := run(ctx, in.superDir, "ls-files", "-s", "--", in.relPath)
-	if err != nil {
-		return "", err
-	}
-	pin := parseGitlink(out)
-	if pin == "" {
+	if st[0] == "" {
 		return "", errors.New("has no gitlink in the superproject index (stale .gitmodules entry?)")
 	}
-	return pin, nil
+	return st[0], nil
+}
+
+// errPinConflict refuses to restore a submodule whose pin has a merge
+// conflict: there is no pin to restore to until one is chosen.
+var errPinConflict = errors.New("has a pin conflict; m chooses its pin")
+
+// indexStages reads the gitlink of a submodule from its parent's index.
+func indexStages(ctx context.Context, in info) (stages, error) {
+	out, err := run(ctx, in.superDir, "ls-files", "-s", "--", in.relPath)
+	if err != nil {
+		return stages{}, err
+	}
+	return parseIndexGitlink(out), nil
 }
 
 // --- restore -----------------------------------------------------------------
@@ -464,19 +480,40 @@ func treeGitlinks(ctx context.Context, dir, commit string) ([]gitlink, error) {
 }
 
 // indexGitlinks lists the submodules in the index of the repository at dir.
+// A gitlink with a merge conflict is listed as ours (theirs if ours removed
+// it): what a reset to HEAD leaves.
 func indexGitlinks(ctx context.Context, dir string) ([]gitlink, error) {
 	out, err := run(ctx, dir, "ls-files", "-s", "-z")
 	if err != nil {
 		return nil, err
 	}
 	var links []gitlink
+	unmerged := map[string]stages{}
 	for _, rec := range strings.Split(out, "\x00") {
 		meta, path, ok := strings.Cut(rec, "\t")
-		if f := strings.Fields(meta); ok && len(f) == 3 && f[0] == "160000" && f[2] == "0" {
+		f := strings.Fields(meta)
+		if !ok || len(f) != 3 || f[0] != "160000" {
+			continue
+		}
+		if f[2] == "0" {
 			links = append(links, gitlink{path: path, sha: f[1]})
+			continue
+		}
+		st, seen := unmerged[path]
+		if n, err := strconv.Atoi(f[2]); err == nil && n > 0 && n < len(st) {
+			st[n] = f[1]
+		}
+		if !seen {
+			links = append(links, gitlink{path: path}) // filled below, in index order
+		}
+		unmerged[path] = st
+	}
+	for i, l := range links {
+		if st, ok := unmerged[l.path]; ok {
+			links[i].sha = st.pin()
 		}
 	}
-	return links, nil
+	return slices.DeleteFunc(links, func(l gitlink) bool { return l.sha == "" }), nil
 }
 
 // stagedPins lists the gitlinks of the index of dir that differ from HEAD's,

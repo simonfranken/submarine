@@ -16,21 +16,22 @@ const (
 type IssueKind int
 
 const (
-	IssueMissing   IssueKind = iota // not initialized or directory missing
-	IssueUnpushed                   // pin not reachable from any remote ref
-	IssueConflict                   // merge conflict in the worktree
-	IssueOffPin                     // checkout differs from pin
-	IssueChanged                    // uncommitted changes or untracked files
-	IssueOffTarget                  // pin pushed, but not on the target branch
+	IssueMissing     IssueKind = iota // not initialized or directory missing
+	IssueUnpushed                     // pin not reachable from any remote ref
+	IssueConflict                     // merge conflict in the worktree
+	IssueOffPin                       // checkout differs from pin
+	IssueChanged                      // uncommitted changes or untracked files
+	IssueOffTarget                    // pin pushed, but not on the target branch
+	IssuePinConflict                  // merge conflict on the pin in the parent
 )
 
 // Kinds lists every issue kind, most severe first.
-var Kinds = []IssueKind{IssueUnpushed, IssueConflict, IssueMissing, IssueOffPin, IssueChanged, IssueOffTarget}
+var Kinds = []IssueKind{IssuePinConflict, IssueUnpushed, IssueConflict, IssueMissing, IssueOffPin, IssueChanged, IssueOffTarget}
 
 // Level is how much attention an issue of kind k deserves.
 func (k IssueKind) Level() Level {
 	switch k {
-	case IssueUnpushed, IssueConflict:
+	case IssuePinConflict, IssueUnpushed, IssueConflict:
 		return LevelDanger
 	case IssueOffTarget:
 		return LevelInfo
@@ -52,6 +53,9 @@ type Issue struct {
 func (s *Status) Issues() []Issue {
 	if s == nil {
 		return nil
+	}
+	if s.PinConflict != nil {
+		return s.conflictIssues()
 	}
 	switch s.Presence {
 	case NotInitialized:
@@ -84,6 +88,39 @@ func (s *Status) Issues() []Issue {
 	// unpushed pin is not on it either, but has the worse issue
 	if !s.Root && s.Pin.Pushed && s.Pin.Target != "" && s.Pin.Ref != s.Pin.Target {
 		out = append(out, Issue{IssueOffTarget, IssueOffTarget.Level(), s.offTargetText()})
+	}
+	return out
+}
+
+// conflictIssues are the issues during a pin conflict: the conflict, then
+// what concerns the checkout alone. Everything that compares with the pin
+// waits until the pin is chosen.
+func (s *Status) conflictIssues() []Issue {
+	c := s.PinConflict
+	detail := "both sides moved the pin"
+	if c.Ours.Name != "" && c.Theirs.Name != "" {
+		detail = c.Ours.Name + " and " + c.Theirs.Name + " both moved the pin"
+	}
+	switch {
+	case c.Ours.Deleted():
+		detail = c.Ours.Name + " removed the submodule, " + c.Theirs.Name + " moved its pin"
+	case c.Theirs.Deleted():
+		detail = c.Theirs.Name + " removed the submodule, " + c.Ours.Name + " moved its pin"
+	}
+	out := []Issue{{IssuePinConflict, IssuePinConflict.Level(), detail}}
+	switch s.Presence {
+	case NotInitialized:
+		return append(out, Issue{IssueMissing, IssueMissing.Level(), "not initialized"})
+	case DirMissing:
+		return append(out, Issue{IssueMissing, IssueMissing.Level(), "directory missing"})
+	}
+	switch s.Worktree {
+	case WorktreeConflict:
+		out = append(out, Issue{IssueConflict, IssueConflict.Level(), "merge conflict"})
+	case WorktreeModified:
+		out = append(out, Issue{IssueChanged, IssueChanged.Level(), "uncommitted changes"})
+	case WorktreeUntracked:
+		out = append(out, Issue{IssueChanged, IssueChanged.Level(), s.untrackedText()})
 	}
 	return out
 }

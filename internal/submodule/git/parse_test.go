@@ -38,6 +38,7 @@ func TestParseStatus(t *testing.T) {
 		"1 .M S.M. 160000 160000 160000 a b libs/nested",
 		"2 R. N... 100644 100644 100644 a b R100 dir/ü new.go", "dir/old.go",
 		"u UU N... 100644 100644 100644 100644 a b c conflict.go",
+		"u UU S... 160000 160000 160000 160000 a b c libs/pinned",
 		"? scratch dir/",
 		"! ignored.o",
 	)
@@ -48,6 +49,7 @@ func TestParseStatus(t *testing.T) {
 		{path: "libs/nested", kind: submodule.ChangeModified, tracked: true, submodule: true},
 		{path: "dir/ü new.go", orig: "dir/old.go", kind: submodule.ChangeRenamed, tracked: true},
 		{path: "conflict.go", kind: submodule.ChangeConflicted, tracked: true},
+		{path: "libs/pinned", kind: submodule.ChangeConflicted, tracked: true, submodule: true},
 		{path: "scratch dir/", kind: submodule.ChangeUntracked},
 	}
 	if got := parseStatus(out); !slices.Equal(got, want) {
@@ -126,13 +128,32 @@ func TestParseCommits(t *testing.T) {
 }
 
 func TestParseGitlink(t *testing.T) {
-	if got := parseGitlink("160000 0123abc 0\tsrc/core"); got != "0123abc" {
-		t.Errorf("ls-files: got %q", got)
-	}
 	if got := parseGitlink("160000 commit 0123abc\tsrc/core"); got != "0123abc" {
 		t.Errorf("ls-tree: got %q", got)
 	}
-	if got := parseGitlink("100644 0123abc 0\tREADME"); got != "" {
+	if got := parseGitlink("100644 blob 0123abc\tREADME"); got != "" {
 		t.Errorf("blob: got %q", got)
+	}
+}
+
+func TestParseIndexGitlink(t *testing.T) {
+	tests := []struct {
+		out        string
+		want       stages
+		conflicted bool
+		pin        string
+	}{
+		{"160000 aaa 0\tsrc/core", stages{"aaa"}, false, "aaa"},
+		{"160000 bbb 1\tlib\n160000 ooo 2\tlib\n160000 ttt 3\tlib", stages{"", "bbb", "ooo", "ttt"}, true, "ooo"},
+		{"160000 bbb 1\tlib\n160000 ttt 3\tlib", stages{"", "bbb", "", "ttt"}, true, "ttt"}, // ours removed it
+		{"160000 bbb 1\tlib\n100644 fff 2\tlib\n160000 ttt 3\tlib", stages{"", "bbb", "", "ttt"}, true, "ttt"},
+		{"100644 fff 0\tREADME", stages{}, false, ""},
+		{"", stages{}, false, ""},
+	}
+	for _, tt := range tests {
+		got := parseIndexGitlink(tt.out)
+		if got != tt.want || got.conflicted() != tt.conflicted || got.pin() != tt.pin {
+			t.Errorf("%q: %v (conflicted %v, pin %q), want %v (%v, %q)", tt.out, got, got.conflicted(), got.pin(), tt.want, tt.conflicted, tt.pin)
+		}
 	}
 }

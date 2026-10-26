@@ -31,6 +31,8 @@ func IssueWord(k submodule.IssueKind) string {
 		return "off pin"
 	case submodule.IssueOffTarget:
 		return "off target"
+	case submodule.IssuePinConflict:
+		return "pin conflict"
 	default:
 		return "changed"
 	}
@@ -48,9 +50,21 @@ func ShortRef(ref string) string {
 	return ansi.Truncate(ref, maxTargetWidth, "…")
 }
 
+// RoleNames are the branch names some roles are labelled with: the target
+// branch, and the sides of a pin conflict.
+type RoleNames struct{ Target, Ours, Theirs string }
+
 // RoleWord is the label of a commit's role on the detail pane's spine; the
-// target is labelled with the name of its branch.
-func RoleWord(r submodule.Role, target string) string {
+// target and the sides of a pin conflict are labelled with the names of
+// their branches.
+func RoleWord(r submodule.Role, names RoleNames) string {
+	// side names are local names already: "feat/x" keeps its prefix
+	named := func(name, fallback string) string {
+		if name == "" {
+			return fallback
+		}
+		return ansi.Truncate(name, maxTargetWidth, "…")
+	}
 	switch r {
 	case submodule.RolePin:
 		return "pin"
@@ -61,10 +75,14 @@ func RoleWord(r submodule.Role, target string) string {
 	case submodule.RoleBase:
 		return "base"
 	case submodule.RoleTarget:
-		if target == "" {
+		if names.Target == "" {
 			return "target"
 		}
-		return ShortRef(target)
+		return ShortRef(names.Target)
+	case submodule.RoleOurs:
+		return named(names.Ours, "ours")
+	case submodule.RoleTheirs:
+		return named(names.Theirs, "theirs")
 	case submodule.RoleTip:
 		return "tip"
 	default:

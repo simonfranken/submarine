@@ -37,11 +37,12 @@ func TestMain(m *testing.M) {
 	os.Exit(code)
 }
 
-// makeFixture runs scripts/make-fixture.sh; the superproject is dir/super.
-func makeFixture(dir string) error {
+// makeFixture runs scripts/make-fixture.sh with args before dir; the
+// superproject is dir/super.
+func makeFixture(dir string, args ...string) error {
 	_, file, _, _ := runtime.Caller(0)
 	script := filepath.Join(filepath.Dir(file), "..", "..", "..", "scripts", "make-fixture.sh")
-	if out, err := exec.Command("bash", script, dir).CombinedOutput(); err != nil {
+	if out, err := exec.Command("bash", append(append([]string{script}, args...), dir)...).CombinedOutput(); err != nil {
 		return fmt.Errorf("make-fixture.sh: %v\n%s", err, out)
 	}
 	return nil

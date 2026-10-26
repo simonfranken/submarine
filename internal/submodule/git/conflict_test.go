@@ -1,0 +1,150 @@
+package git
+
+import (
+	"context"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"submarine/internal/submodule"
+)
+
+// conflictFixture builds the superproject of make-fixture.sh --pin-conflict,
+// in a merge of feat into main with a pin conflict on every library.
+func conflictFixture(t *testing.T) (*Provider, *submodule.Repo, string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := filepath.Join(t.TempDir(), "fx")
+	if err := makeFixture(dir, "--pin-conflict"); err != nil {
+		t.Fatal(err)
+	}
+	super := filepath.Join(dir, "super")
+	p, err := New(super)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := p.Tree(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	return p, repo, super
+}
+
+func TestPinConflictStatus(t *testing.T) {
+	p, repo, super := conflictFixture(t)
+	ctx := context.Background()
+	if repo.Operation != "merging feat" {
+		t.Errorf("Operation = %q, want merging feat", repo.Operation)
+	}
+	root, err := p.Status(ctx, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if root.Worktree != submodule.WorktreeClean {
+		t.Errorf("superproject Worktree = %v: the pin conflicts are shown by their rows", root.Worktree)
+	}
+
+	sha := func(name, rev string) string {
+		return out(t, filepath.Join(super, "..", "work", name), "rev-parse", rev)
+	}
+	for _, tt := range []struct {
+		name       string
+		fetched    bool
+		candidates int
+	}{
+		{"alpha", true, 1},
+		{"beta", true, 0},
+		{"gamma", false, 0},
+	} {
+		st, err := p.Status(ctx, "libs/"+tt.name)
+		if err != nil {
+			t.Fatalf("%s: %v", tt.name, err)
+		}
+		c := st.PinConflict
+		if c == nil {
+			t.Fatalf("%s: no PinConflict", tt.name)
+		}
+		if got := kindsOf(st.Issues()); len(got) != 1 || got[0] != submodule.IssuePinConflict {
+			t.Errorf("%s: issues %v, want only pin conflict", tt.name, got)
+		}
+		if st.PinStaged {
+			t.Errorf("%s: PinStaged during a conflict", tt.name)
+		}
+		if c.Ours.Name != "main" || c.Theirs.Name != "feat" {
+			t.Errorf("%s: sides %q/%q, want main/feat", tt.name, c.Ours.Name, c.Theirs.Name)
+		}
+		if want := sha(tt.name, "main"); tt.name != "alpha" && c.Ours.SHA != want {
+			t.Errorf("%s: ours %s, want %s", tt.name, c.Ours.SHA, want)
+		}
+		if want := sha(tt.name, "feat/"+tt.name); c.Theirs.SHA != want {
+			t.Errorf("%s: theirs %s, want %s", tt.name, c.Theirs.SHA, want)
+		}
+		if !strings.HasPrefix(c.Ours.SHA, st.Pinned.SHA) || c.Ours.Commit == nil || c.Base == nil {
+			t.Errorf("%s: pin %v, ours %v, base %v", tt.name, st.Pinned, c.Ours.Commit, c.Base)
+		}
+		if (c.Theirs.Commit != nil) != tt.fetched {
+			t.Errorf("%s: theirs commit %v, fetched %v", tt.name, c.Theirs.Commit, tt.fetched)
+		}
+		if tt.fetched && (c.Drift != submodule.Distance{Ahead: 1, Behind: 1} || c.MergeBase == nil) {
+			t.Errorf("%s: drift %+v, merge base %v", tt.name, c.Drift, c.MergeBase)
+		}
+		// alpha's main has merged the feature: it is on the target
+		if want := map[string]string{"alpha": "origin/main", "beta": "origin/feat/beta"}[tt.name]; c.Theirs.Pin.Ref != want {
+			t.Errorf("%s: theirs ref %q", tt.name, c.Theirs.Pin.Ref)
+		}
+		if len(c.Candidates) != tt.candidates {
+			t.Errorf("%s: candidates %+v, want %d", tt.name, c.Candidates, tt.candidates)
+		}
+	}
+
+	// alpha: main merged the feature, then moved on by one commit
+	st, _ := p.Status(ctx, "libs/alpha")
+	cand := st.PinConflict.Candidates[0]
+	if cand.Ref != "origin/main" || cand.Behind != 1 || cand.Commit.Subject != "Merge feat/alpha" {
+		t.Errorf("alpha candidate %+v %+v", cand, cand.Commit)
+	}
+
+	// restore refuses: there is no pin until one is chosen
+	if err := p.Restore(ctx, "libs/alpha", submodule.RestoreStaged); err == nil || !strings.Contains(err.Error(), "pin conflict") {
+		t.Errorf("Restore during a pin conflict: %v", err)
+	}
+}
+
+func kindsOf(is []submodule.Issue) []submodule.IssueKind {
+	var out []submodule.IssueKind
+	for _, i := range is {
+		out = append(out, i.Kind)
+	}
+	return out
+}
+
+// A rebase swaps the sides: ours is the branch rebased onto.
+func TestPinConflictRebaseNames(t *testing.T) {
+	_, _, super := conflictFixture(t)
+	ctx := context.Background()
+	for _, args := range [][]string{{"merge", "--abort"}, {"switch", "-q", "feat"}} {
+		out(t, super, args...)
+	}
+	exec.Command("git", "-C", super, "-c", "user.name=A", "-c", "user.email=a@b", "rebase", "main").Run() // stops at the conflict
+	p, err := New(super)
+	if err != nil {
+		t.Fatal(err)
+	}
+	repo, err := p.Tree(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if repo.Operation != "rebasing feat" {
+		t.Errorf("Operation = %q, want rebasing feat", repo.Operation)
+	}
+	st, err := p.Status(ctx, "libs/beta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c := st.PinConflict; c == nil || c.Ours.Name != "main" || c.Theirs.Name != "feat" {
+		t.Errorf("PinConflict = %+v, want sides main/feat", c)
+	}
+}

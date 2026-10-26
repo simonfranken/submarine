@@ -22,7 +22,7 @@ func TestSpineLines(t *testing.T) {
 		Drift:      submodule.Distance{Behind: 1},
 	}
 	var got []string
-	for _, l := range m.spineLines(st.Spine(), true, "") {
+	for _, l := range m.spineLines(st.Spine(), true, theme.RoleNames{}) {
 		got = append(got, ansi.Strip(l))
 	}
 	g := theme.Default().Glyphs
@@ -48,7 +48,7 @@ func TestSpineLinesStagedMovesBack(t *testing.T) {
 		CommittedDrift: submodule.Distance{Ahead: 15},
 	}
 	var got []string
-	for _, l := range m.spineLines(st.Spine(), false, "") {
+	for _, l := range m.spineLines(st.Spine(), false, theme.RoleNames{}) {
 		got = append(got, ansi.Strip(l))
 	}
 	g := theme.Default().Glyphs
@@ -66,7 +66,7 @@ func TestSpineLinesInSync(t *testing.T) {
 	m := New(theme.Default(), nil)
 	c := &submodule.Commit{SHA: "3f1bf20", Subject: "Fix deps"}
 	st := submodule.Status{Pinned: c, CheckedOut: c, Tip: c}
-	lines := m.spineLines(st.Spine(), false, "")
+	lines := m.spineLines(st.Spine(), false, theme.RoleNames{})
 	if len(lines) != 1 {
 		t.Fatalf("got %d lines, want 1", len(lines))
 	}
@@ -85,7 +85,7 @@ func TestSpineLinesFork(t *testing.T) {
 		Bases: submodule.Bases{Tip: c("a1b2c3d", "Release 1.4")},
 	}
 	var got []string
-	for _, l := range m.spineLines(st.Spine(), false, "") {
+	for _, l := range m.spineLines(st.Spine(), false, theme.RoleNames{}) {
 		got = append(got, ansi.Strip(l))
 	}
 	g := theme.Default().Glyphs
@@ -118,7 +118,7 @@ func TestSpineLinesTargetName(t *testing.T) {
 		"origin/feature/a-very-long-branch-name": "feature/a-very-…",
 		"":                                       "target",
 	} {
-		lines := m.spineLines(st.Spine(), false, target)
+		lines := m.spineLines(st.Spine(), false, theme.RoleNames{Target: target})
 		last := ansi.Strip(lines[len(lines)-1])
 		if !strings.HasPrefix(last, want) {
 			t.Errorf("target %q: last line %q, want label %q", target, last, want)

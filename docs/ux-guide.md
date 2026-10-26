@@ -117,13 +117,15 @@ For the superproject (header selected), the `pin` and `you` roles become
    narrow, or the submodule is missing). If the last fetch is older than a
    day, or there was none, it continues `· f fetch` (key bold), if there is
    room
-2. One line per issue: word (colored, 11 columns) + explanation;
+2. One line per issue: word (colored, 11 columns, longer words push the
+   text) + explanation;
    `in sync  nothing to do` if there are none and no pin is staged;
    `staged` and `detached HEAD on pin` as information
 3. `Changes` (only with uncommitted changes), see
    [Change preview](#change-preview)
 4. `Ref` with `· via <rule>`, a blank line, then the [spine](#spine);
-   `fetch  failed: <git's message>` (yellow word) if the last fetch failed
+   `fetch  failed: <git's message>` (yellow word) if the last fetch failed.
+   During a pin conflict, see [Pin conflict](#pin-conflict)
 5. `Children` (count and issues below), `URL`
 
 #### Spine
@@ -190,6 +192,37 @@ you       ● 48005ac Merge branch 'feat/ethercat…
   join `─╯` (`-/`).
 - A missing submodule has only the pin node (SHA, no subject).
 
+#### Pin conflict
+
+```
+pin conflict main and feat both moved the pin
+
+main       88f9593 ours · origin/main ↓3
+feat       05122d7 theirs · origin/feat/x
+
+feat         ● 05122d7 Add alpha feature
+             ┊ 1 commit
+main · you ● ┊ 88f9593 Fix alpha
+           ┊ ┊ 1 commit
+base       ●─╯ cb4e95c Add docs to alpha
+
+Has both   b8dfd28 origin/main ↓1 · Merge feat/alpha
+```
+
+- Instead of `Ref`, one line per side, labelled with its branch name:
+  SHA, `ours` / `theirs` (muted), the branch it is on and its distance;
+  `unpushed` (red) if it is on no remote, `not fetched · f fetch` (yellow)
+  if the commit isn't in the submodule, `removed the submodule` for a side
+  without a pin. No `staged` and no `detached HEAD on pin` lines.
+- The spine shows ours in the pin's place and theirs in the tip's,
+  labelled with their names (cut like the target's): theirs is a fork if
+  both have commits of their own. Tip and target are left out.
+- `Has both` lists the [candidates](state-model.md#pin-conflicts): SHA,
+  the branch and how far it is behind its tip (`your checkout`, or
+  `theirs has both`), then the subject. If there is none: `no commit yet ·
+  merge in the submodule, or pick a side`. Left out if a side is not
+  fetched.
+
 #### Change preview
 
 ```
@@ -244,14 +277,19 @@ shows the superproject's own state word like a tree row (`in sync`,
 `changed`, `unpushed +1`, spinner, `error`). The counts that follow are
 about submodules only.
 
-`path  branch ↑↓ state            n error · <count> <issue>… · n staged · n loading · n submodules · <fetch>`
+`path  branch ↑↓ state  operation            n error · <count> <issue>… · n staged · n loading · n submodules · <fetch>`
 
 The summary and `<fetch>` form one group at the right edge; the path,
 branch and state stay at the left. If the line is too narrow it is cut with
 `…` at the right end, so the most important counts stay.
 
-Issue counts are ordered by severity (unpushed, conflict, missing, off pin,
-changed, off target), each in its level color. Zero counts are omitted. `n loading`
+During a merge, rebase, cherry-pick or revert of the superproject,
+`operation` names it after the state word, in yellow (`merging feat`). Once
+everything is loaded, no pin conflict is left and the superproject has no
+conflicted file, it continues `· ready to commit` (muted).
+
+Issue counts are ordered by severity (pin conflict, unpushed, conflict,
+missing, off pin, changed, off target), each in its level color. Zero counts are omitted. `n loading`
 counts only submodules whose status is still being loaded; ones whose load
 failed are counted separately as `n error` (red, before the issue counts). A detached
 superproject shows `(detached)` as its branch.
@@ -275,8 +313,8 @@ colors in components.
 
 | Role | Color | Used for |
 |---|---|---|
-| Danger | ANSI `1` red, bold | `unpushed`, `conflict`, `error`, `↑n` of an unpushed pin |
-| Warn | ANSI `3` yellow | `missing`, `off pin`, `changed`, differing checkout SHA |
+| Danger | ANSI `1` red, bold | `pin conflict`, `unpushed`, `conflict`, `error`, `↑n` of an unpushed pin |
+| Warn | ANSI `3` yellow | `missing`, `off pin`, `changed`, differing checkout SHA, the operation in the header, `not fetched` |
 | Info | ANSI `4` blue | `staged`, the `●` staged marker, `off target` |
 | Primary | ANSI `6` cyan | branch names, commit hashes, spinner |
 | Muted | ANSI `8` grey | quiet rows, directory headers, arrows, labels |
@@ -297,6 +335,7 @@ colors in components.
 
 | Word | Detail pane text |
 |---|---|
+| `pin conflict` | `<ours> and <theirs> both moved the pin` / `<side> removed the submodule, <side> moved its pin` |
 | `unpushed` | pin not pushed to any remote |
 | `conflict` | merge conflict |
 | `missing` | not initialized / directory missing |

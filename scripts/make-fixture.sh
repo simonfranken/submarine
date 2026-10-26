@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Builds a superproject with submodules in every state submarine shows.
-# Usage: scripts/make-fixture.sh <dir>   (dir must not exist)
+# Usage: scripts/make-fixture.sh [--pin-conflict] <dir>   (dir must not exist)
 # The superproject is <dir>/super; bare "remotes" live in <dir>/remotes.
+# --pin-conflict builds a small superproject in a merge with pin conflicts
+# instead (a merge can't start with the staged pins of the full fixture).
 set -euo pipefail
 
-[ $# -eq 1 ] || { echo "usage: $0 <dir>" >&2; exit 2; }
+conflict=
+if [ "${1:-}" = --pin-conflict ]; then conflict=1; shift; fi
+[ $# -eq 1 ] || { echo "usage: $0 [--pin-conflict] <dir>" >&2; exit 2; }
 [ ! -e "$1" ] || { echo "$1 already exists" >&2; exit 2; }
 mkdir -p "$1"
 root=$(cd "$1" && pwd)
@@ -42,6 +46,50 @@ upstream() {
 }
 
 mkdir -p "$root/remotes" "$root/work"
+
+if [ -n "$conflict" ]; then
+	for r in alpha beta gamma; do remote "$r"; done
+	super="$root/super"
+	git init -q "$super"
+	commit "$super" README "Initial superproject"
+	for r in alpha beta gamma; do g "$super" submodule add "$root/remotes/$r.git" "libs/$r"; done
+	g "$super" commit -m "Add submodules"
+
+	# each library gets a fix on main (ours) and a feature on a branch (theirs)
+	for r in alpha beta gamma; do
+		w="$root/work/$r"
+		g "$w" switch -c "feat/$r"
+		commit "$w" feature "Add $r feature"
+		g "$w" switch main
+		commit "$w" README "Fix $r"
+		g "$w" push origin main
+	done
+	# alpha: main merged the feature since, and moved on: a commit with both
+	g "$root/work/alpha" merge --no-ff -m "Merge feat/alpha" feat/alpha
+	commit "$root/work/alpha" README "Polish alpha"
+	for r in alpha beta; do g "$root/work/$r" push origin main "feat/$r"; done
+	for r in alpha beta gamma; do g "$super/libs/$r" fetch; done
+	# gamma: the feature is pushed only after the fetch: theirs is not fetched
+	g "$root/work/gamma" push origin feat/gamma
+
+	# the superproject's feat pins the features, main the fixes
+	g "$super" switch -c feat
+	for r in alpha beta gamma; do
+		g "$super" update-index --cacheinfo "160000,$(git -C "$root/work/$r" rev-parse "feat/$r"),libs/$r"
+	done
+	g "$super" commit -m "Use the features"
+	g "$super" switch main
+	for r in alpha beta gamma; do
+		fix=$(git -C "$root/work/$r" log --format=%H -1 --grep="^Fix $r\$" main)
+		g "$super/libs/$r" switch -q --detach "$fix"
+		g "$super" add "libs/$r"
+	done
+	g "$super" commit -m "Use the fixes"
+	git -C "$super" merge feat >/dev/null 2>&1 || true
+	echo "$super"
+	exit 0
+fi
+
 for r in core ui net store log feature nested work; do remote "$r"; done
 
 # "feature" has a branch that main doesn't contain (a pin there is off target)

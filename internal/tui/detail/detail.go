@@ -146,7 +146,10 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 
 	issues := st.Issues()
 	for _, is := range issues {
-		out = append(out, t.LevelStyle(is.Level, lipgloss.NewStyle()).Width(labelWidth).Render(theme.IssueWord(is.Kind))+text.Render(is.Detail))
+		// a word longer than the label column pushes the text, not wraps
+		word := theme.IssueWord(is.Kind)
+		pad := strings.Repeat(" ", max(labelWidth-ansi.StringWidth(word), 1))
+		out = append(out, t.LevelStyle(is.Level, lipgloss.NewStyle()).Render(word)+pad+text.Render(is.Detail))
 	}
 	if len(issues) == 0 && !st.PinStaged {
 		out = append(out, label(theme.InSync)+muted.Render("nothing to do"))
@@ -154,7 +157,7 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	if st.PinStaged {
 		out = append(out, theme.Fg(t.Info).Width(labelWidth).Render(theme.Staged)+text.Render("pin change staged, not committed"))
 	}
-	if st.Checkout == submodule.CheckoutDetached {
+	if st.Checkout == submodule.CheckoutDetached && st.PinConflict == nil {
 		text := "detached HEAD on pin"
 		if st.Root {
 			text = "detached HEAD"
@@ -167,11 +170,21 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	}
 	out = append(out, "")
 
-	// ref and spine
-	if st.Pin.Ref != "" {
+	// ref and spine; during a pin conflict the sides instead of the ref,
+	// and below the spine the commits that have both
+	names := theme.RoleNames{Target: st.Pin.Target}
+	switch c := st.PinConflict; {
+	case c != nil:
+		names.Ours, names.Theirs = c.Ours.Name, c.Theirs.Name
+		out = append(out, m.sideLine(c.Ours, "ours", label), m.sideLine(c.Theirs, "theirs", label), "")
+	case st.Pin.Ref != "":
 		out = append(out, label("Ref")+text.Render(st.Pin.Ref)+muted.Render(" · via "+st.Pin.Source.String()), "")
 	}
-	out = append(out, m.spineLines(st.Spine(), st.Checkout == submodule.CheckoutDiffers, st.Pin.Target)...)
+	out = append(out, m.spineLines(st.Spine(), st.Checkout == submodule.CheckoutDiffers && st.PinConflict == nil, names)...)
+	if c := st.PinConflict; c != nil && c.Ours.Commit != nil && c.Theirs.Commit != nil {
+		out = append(out, "")
+		out = append(out, m.candidateLines(c.Candidates, label)...)
+	}
 	if s.FetchErr != nil {
 		out = append(out, theme.Fg(t.Warn).Width(labelWidth).Render("fetch")+text.Render("failed: "+s.FetchErr.Error()))
 	}
@@ -195,6 +208,63 @@ func (m Model) lines(s *submodule.Submodule, repo *submodule.Repo) []string {
 	}
 	if s.URL != "" {
 		out = append(out, label("URL")+muted.Render(s.URL))
+	}
+	return out
+}
+
+// sideLine describes one side of a pin conflict: its commit and the branch
+// it is on, or why that is unknown.
+func (m Model) sideLine(side submodule.ConflictSide, role string, label func(string) string) string {
+	t := m.theme
+	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
+	head := label(ansi.Truncate(side.Name, labelWidth-1, "…"))
+	switch {
+	case side.Deleted():
+		return head + muted.Render(role+" · ") + text.Render("removed the submodule")
+	case side.Commit == nil:
+		return head + muted.Render(role+" · ") + theme.Fg(t.Warn).Render("not fetched") +
+			muted.Render(" · ") + text.Bold(true).Render("f") + muted.Render(" fetch")
+	}
+	line := head + theme.Fg(t.Primary).Render(side.Commit.SHA) + muted.Render(" "+role)
+	switch {
+	case !side.Pin.Pushed:
+		line += muted.Render(" · ") + t.LevelStyle(submodule.LevelDanger, lipgloss.NewStyle()).Render("unpushed")
+	case side.Pin.Ref != "":
+		line += muted.Render(" · ") + text.Render(side.Pin.Ref)
+		if d := t.Delta(side.Pin, lipgloss.NewStyle()); d != "" {
+			line += " " + d
+		}
+	}
+	return line
+}
+
+// candidateLines list the commits that contain both sides of a pin
+// conflict, or say that there is none yet.
+func (m Model) candidateLines(cands []submodule.Candidate, label func(string) string) []string {
+	t := m.theme
+	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
+	if len(cands) == 0 {
+		return []string{label("Has both") + muted.Render("no commit yet · merge in the submodule, or pick a side")}
+	}
+	var out []string
+	for i, c := range cands {
+		head := label("")
+		if i == 0 {
+			head = label("Has both")
+		}
+		var where string
+		switch {
+		case c.Checkout:
+			where = muted.Render("your checkout")
+		case c.Side != "":
+			where = muted.Render(c.Side + " has both")
+		default:
+			where = text.Render(c.Ref)
+			if d := t.Delta(submodule.PinInfo{Behind: c.Behind, Pushed: true}, lipgloss.NewStyle()); d != "" {
+				where += " " + d
+			}
+		}
+		out = append(out, head+theme.Fg(t.Primary).Render(c.Commit.SHA)+" "+where+muted.Render(" · ")+text.Render(c.Commit.Subject))
 	}
 	return out
 }
@@ -223,7 +293,7 @@ func (m Model) hiddenParts(h submodule.Hidden) string {
 // newest on top: a node per commit with its roles in the label column, and
 // between two nodes how many commits separate them. offPin colors the
 // checkout's own node.
-func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool, target string) []string {
+func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool, names theme.RoleNames) []string {
 	t := m.theme
 	muted, text := theme.Fg(t.Muted), theme.Fg(t.Text)
 
@@ -235,7 +305,7 @@ func (m Model) spineLines(nodes []submodule.SpineNode, offPin bool, target strin
 	for i, n := range nodes {
 		var plain, styled []string
 		for _, r := range n.Roles {
-			word := theme.RoleWord(r, target)
+			word := theme.RoleWord(r, names)
 			style := muted
 			switch {
 			case r == submodule.RoleStaged:

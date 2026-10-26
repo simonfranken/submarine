@@ -1,6 +1,7 @@
 package git
 
 import (
+	"cmp"
 	"fmt"
 	"strconv"
 	"strings"
@@ -80,7 +81,7 @@ func parseStatus(out string) []entry {
 			es = append(es, entry{path: rec[2:], kind: submodule.ChangeUntracked})
 		case 'u': // u XY sub m1 m2 m3 mW h1 h2 h3 path
 			if f := strings.SplitN(rec, " ", 11); len(f) == 11 {
-				es = append(es, entry{path: f[10], kind: submodule.ChangeConflicted, tracked: true})
+				es = append(es, entry{path: f[10], kind: submodule.ChangeConflicted, tracked: true, submodule: strings.HasPrefix(f[2], "S")})
 			}
 		case '1': // 1 XY sub mH mI mW hH hI path
 			if f := strings.SplitN(rec, " ", 9); len(f) == 9 {
@@ -206,16 +207,42 @@ func parseCommits(out string) []submodule.Commit {
 }
 
 // parseGitlink returns the SHA of a gitlink (mode 160000) entry in
-// `git ls-files -s` or `git ls-tree` output, or "" if there is none.
+// `git ls-tree` output, or "" if there is none.
 func parseGitlink(out string) string {
 	for _, line := range strings.Split(out, "\n") {
-		f := strings.Fields(line)
-		switch {
-		case len(f) >= 3 && f[0] == "160000" && f[1] == "commit": // ls-tree
+		if f := strings.Fields(line); len(f) >= 3 && f[0] == "160000" && f[1] == "commit" {
 			return f[2]
-		case len(f) >= 2 && f[0] == "160000": // ls-files -s
-			return f[1]
 		}
 	}
 	return ""
+}
+
+// stages are the SHAs of a gitlink in the index by stage: 0 if it is merged,
+// else 1 (base), 2 (ours) and 3 (theirs); "" where there is none.
+type stages [4]string
+
+// conflicted reports whether the gitlink has a merge conflict: no stage 0,
+// but at least one side.
+func (s stages) conflicted() bool { return s[0] == "" && (s[2] != "" || s[3] != "") }
+
+// pin is the gitlink the checkout is compared with: stage 0, else ours,
+// else theirs (ours removed the submodule).
+func (s stages) pin() string { return cmp.Or(s[0], s[2], s[3]) }
+
+// parseIndexGitlink parses `git ls-files -s -- <path>` output for one path.
+// Entries that are not gitlinks (a side replaced the submodule with a file)
+// are left out.
+func parseIndexGitlink(out string) stages {
+	var s stages
+	for _, line := range strings.Split(out, "\n") {
+		meta, _, _ := strings.Cut(line, "\t")
+		f := strings.Fields(meta)
+		if len(f) != 3 || f[0] != "160000" {
+			continue
+		}
+		if n, err := strconv.Atoi(f[2]); err == nil && n >= 0 && n < len(s) {
+			s[n] = f[1]
+		}
+	}
+	return s
 }

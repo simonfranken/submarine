@@ -10,6 +10,8 @@ const (
 	RolePin    Role = iota // the commit recorded in the superproject's HEAD
 	RoleHead               // the superproject's HEAD, which takes the pin's place
 	RoleStaged             // the pin in the index, if it differs from RolePin
+	RoleOurs               // during a pin conflict: the parent HEAD's side, which takes the pin's place
+	RoleTheirs             // during a pin conflict: the side being merged in
 	RoleTip                // the tip of the ref the pin was resolved to
 	RoleTarget             // the tip of the target branch, if the pin is not on it
 	RoleYou                // the commit checked out in the submodule
@@ -63,6 +65,9 @@ type spineItem struct {
 // checkout as one line of history, newest on top. Roles on the same commit
 // share a node.
 //
+// During a pin conflict ours takes the pin's place and theirs the tip's;
+// the tip, the target and a committed pin are left out.
+//
 // A commit that has diverged from the pin is drawn as a fork if it is the
 // only one and its merge base is known: it is the first node, and the
 // RoleBase node where the histories split follows on the main lane. Otherwise
@@ -73,7 +78,13 @@ func (s *Status) Spine() []SpineNode {
 		return nil
 	}
 	pinRole := RolePin
+	conflict := s.PinConflict
 	switch {
+	case conflict != nil:
+		pinRole = RoleOurs
+		if conflict.Ours.Deleted() {
+			pinRole = RoleTheirs // the only side there is
+		}
 	case s.Root:
 		pinRole = RoleHead
 	case s.PinStaged:
@@ -98,13 +109,16 @@ func (s *Status) Spine() []SpineNode {
 			divs = append(divs, it)
 		}
 	}
-	if s.Tip != nil {
+	if conflict != nil && !conflict.Ours.Deleted() && conflict.Theirs.Commit != nil {
+		place(RoleTheirs, conflict.Theirs.Commit, conflict.MergeBase, conflict.Drift.Ahead, conflict.Drift.Behind, true)
+	}
+	if s.Tip != nil && conflict == nil {
 		place(RoleTip, s.Tip, s.Bases.Tip, s.Pin.Behind, s.Pin.Ahead, true)
 	}
-	if s.TargetTip != nil {
+	if s.TargetTip != nil && conflict == nil {
 		place(RoleTarget, s.TargetTip, s.Bases.Target, s.TargetDrift.Ahead, s.TargetDrift.Behind, true)
 	}
-	if s.PinStaged && s.Committed != nil {
+	if s.PinStaged && s.Committed != nil && conflict == nil {
 		place(RolePin, s.Committed, s.Bases.Committed, s.CommittedDrift.Ahead, s.CommittedDrift.Behind, false)
 	}
 	switch {

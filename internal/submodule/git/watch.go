@@ -17,7 +17,7 @@ import (
 // means something in that area changed.
 type fingerprint struct {
 	remote    string // FETCH_HEAD, remote-tracking branches, tags
-	local     string // HEAD, index, local branches, packed refs, merge state
+	local     string // HEAD, index, local branches, packed refs, operations in progress
 	structure string // .gitmodules and whether the repository is checked out
 }
 
@@ -94,7 +94,10 @@ func fingerprintOf(dir string) fingerprint {
 	stampTree(&remote, filepath.Join(common, "refs", "remotes"))
 	stampTree(&remote, filepath.Join(common, "refs", "tags"))
 
-	for _, name := range []string{"HEAD", "index", "MERGE_HEAD"} {
+	for _, name := range []string{"HEAD", "index", "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD"} {
+		stamp(&local, filepath.Join(gitDir, name))
+	}
+	for _, name := range []string{"rebase-merge", "rebase-apply"} {
 		stamp(&local, filepath.Join(gitDir, name))
 	}
 	stamp(&local, filepath.Join(common, "packed-refs"))

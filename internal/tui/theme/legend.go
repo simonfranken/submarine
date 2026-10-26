@@ -25,6 +25,8 @@ func issueMeaning(k submodule.IssueKind) string {
 		return "checkout is not the pin"
 	case submodule.IssueChanged:
 		return "uncommitted files"
+	case submodule.IssuePinConflict:
+		return "both sides moved the pin"
 	default:
 		return "pin not on target branch"
 	}
@@ -51,12 +53,14 @@ func (t Theme) Legend() []LegendGroup {
 		{muted.Render("[n]"), "children, collapsed"},
 	}}
 	commits := LegendGroup{Title: "Commits", Rows: []LegendRow{
-		{muted.Render(RoleWord(submodule.RolePin, "")), "what the parent records"},
-		{Fg(t.Text).Bold(true).Render(RoleWord(submodule.RoleYou, "")), "the checkout"},
-		{muted.Render(RoleWord(submodule.RoleTip, "")), "newest on the ref"},
+		{muted.Render(RoleWord(submodule.RolePin, RoleNames{})), "what the parent records"},
+		{Fg(t.Text).Bold(true).Render(RoleWord(submodule.RoleYou, RoleNames{})), "the checkout"},
+		{muted.Render(RoleWord(submodule.RoleTip, RoleNames{})), "newest on the ref"},
 		{muted.Render("main"), "tip of target branch"},
-		{muted.Render(RoleWord(submodule.RoleBase, "")), "where lines split"},
-		{muted.Render(RoleWord(submodule.RoleHead, "")), "superproject checkout"},
+		{muted.Render(RoleWord(submodule.RoleBase, RoleNames{})), "where lines split"},
+		{muted.Render(RoleWord(submodule.RoleHead, RoleNames{})), "superproject checkout"},
+		{muted.Render(RoleWord(submodule.RoleOurs, RoleNames{})), "pin conflict: your side"},
+		{muted.Render(RoleWord(submodule.RoleTheirs, RoleNames{})), "pin conflict: merged in"},
 	}}
 	return []LegendGroup{status, symbols, commits}
 }
