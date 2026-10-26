@@ -97,8 +97,10 @@ commit hashes. It doesn't answer the questions users actually have:
   cherry-pick or revert moved it) is shown as `pin conflict` (Danger), not
   as a staged or off pin. The detail pane names both sides after their
   branches, shows where each is and how they relate, and lists the commits
-  that already contain both. See
-  [state-model.md](state-model.md#pin-conflicts).
+  that already contain both. `m` resolves it: the chosen side or commit
+  becomes the pin and the submodule is restored to it. See
+  [state-model.md](state-model.md#pin-conflicts) and
+  [actions.md](actions.md#resolve-pin-conflict).
 
 ### Header and footer
 

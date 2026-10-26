@@ -3,7 +3,9 @@
 **Status:** [Restore](#restore) (key `x`, [D23](decisions.md); hard restore
 `X`, [D30](decisions.md)),
 [Switch branch](#switch-branch) (key `b`, [D24](decisions.md)) and
-[Update pin](#update-pin) (key `u`, [D29](decisions.md)) are implemented.
+[Update pin](#update-pin) (key `u`, [D29](decisions.md)) and
+[Resolve pin conflict](#resolve-pin-conflict) (key `m`, [D34](decisions.md))
+are implemented.
 Stage pin was dropped ([D29](decisions.md)).
 
 ## Principle
@@ -17,6 +19,7 @@ a difference in one of two directions:
 | [Restore](#restore) | The worktree follows the recorded state | `x`, `X` (hard) |
 | [Switch branch](#switch-branch) | Both: the branch tip is recorded, then restored to | `b` |
 | [Update pin](#update-pin) | Both: a switch to the tip of the pin's ref | `u` |
+| [Resolve pin conflict](#resolve-pin-conflict) | Both: the chosen side (or a commit with both) is recorded, then restored to | `m` |
 
 There is nothing else for now. Committing and pushing are done outside
 submarine. Recording a commit made in a submodule is a switch to its branch
@@ -385,19 +388,78 @@ branches (`Switcher.Branches`), takes the one named like `Pin.Ref`, checks
 that its tip still starts with the abbreviated `Status.Tip.SHA`, and then
 runs the switch flow with it (`SwitchLoss`, `Switch`).
 
+## Resolve pin conflict
+
+Ends a [pin conflict](state-model.md#pin-conflicts): the parent of the
+selected submodule is in a merge (rebase, cherry-pick, revert) in which
+both sides moved its pin. `m` opens a popup like `b` with the pins to
+choose from:
+
+| Item | Note |
+|---|---|
+| ours, named after its branch (`main`) | `ours · origin/main ↓3`, `· unpushed`, `· not fetched` |
+| theirs (`feat`) | the same with `theirs` |
+| each commit that contains both, named after its branch (`origin/main`) | `has both · 1 behind the tip` |
+| the checkout, if it contains both | `your checkout, has both` |
+| `remove`, instead of a side that removed the submodule | `<side> removed the submodule` |
+
+The first commit with both is preselected (a side that contains the other
+gets `· has both` and is preselected), else ours.
+
+### Effect
+
+1. The chosen SHA replaces the three stages in the parent's index
+   (`update-index --cacheinfo`): the conflict is resolved, the pin staged.
+2. The submodule and everything below it are restored to it, as by
+   [Restore](#restore): a commit that isn't fetched is fetched (the only
+   network use), HEAD is put on a branch at it ([Branches](#branches)).
+   If the restore fails, the pin stays staged and `x` repeats it.
+
+`remove` only removes the gitlink from the index (`rm --cached`); the
+directory and the `.gitmodules` entry are left to the user.
+
+submarine does not merge inside the submodule and does not commit the
+superproject. If no commit has both sides yet, merge them in the
+submodule (in a shell), then `m` offers the checkout. When no conflict is
+left, the header says `merging feat · ready to commit`.
+
+### Confirmation, lines, errors
+
+Like a switch: `checking libs/alpha…`, the question only if something would
+be lost (`Resolve libs/alpha to main 88f9593? Discards …   y resolve · n
+cancel`), `resolving libs/alpha to origin/main 32b19cd…`, flash `resolved
+libs/alpha to origin/main 32b19cd`; `remove` reads `by removing it`.
+Failure: `resolve of libs/alpha to … failed: …`. If the conflict was
+resolved meanwhile (in a shell), the check fails with `has no pin conflict
+(resolved meanwhile?)`.
+
+During a pin conflict `x`, `X` and `u` refuse with `libs/alpha has a pin
+conflict; m chooses its pin`: there is no pin to restore to or to update.
+`b` works: the branch tip it stages resolves the conflict too.
+
+### Implementation note
+
+`submodule.Resolver` (`ResolveLoss`, `Resolve`), implemented in
+`internal/submodule/git/resolve.go` with the restore's `lossOf` and
+`restoreRepo`. The UI (`internal/tui/resolve.go`) builds the items from
+`Status.PinConflict` and reuses the branch picker (`branches.NewChoices`)
+and the restore flow (`restoreState.resolve`).
+
 ## Keys and palette
 
-All three are submodule keys (`keyMap.Submodule`), shown in the detail
+They are submodule keys (`keyMap.Submodule`), shown in the detail
 pane's palette, or in the footer when the pane can't show it. They are
-always offered, the palette is static: restore is idempotent, and `u` says
-why it can't update. Only `u`'s label follows the selection: on the header
-it reads `pull (fast-forward)`.
+always offered: restore is idempotent, and `u` says why it can't update.
+`u`'s label follows the selection: on the header it reads `pull
+(fast-forward)`. `m` is only in the palette, first, for a submodule with a
+pin conflict; it is always in the full help.
 
 | Key | Action | Pressed when not possible (flash) |
 |---|---|---|
-| `x` restore to pin, `X` restore committed pins | Restore the selection; `X` see [Hard restore](#hard-restore) | `this data source can't restore` (mock); `wait for the restore of … to finish` |
+| `x` restore to pin, `X` restore committed pins | Restore the selection; `X` see [Hard restore](#hard-restore) | `this data source can't restore` (mock); `wait for the restore of … to finish`; `src/app has a pin conflict; m chooses its pin` |
 | `b` switch branch | [Switch branch](#switch-branch) | `this data source can't switch branches`; `wait for the restore of … to finish`; `src/app is not initialized; restore it first` |
-| `u` update pin (`pull (fast-forward)` on the header) | [Update pin](#update-pin) | `this data source can't update pins`; `wait for the restore of … to finish`; `the superproject has no upstream branch`; `src/app is still loading`; `src/app is not initialized; restore it first`; `the pin of src/app is not on a branch`; `the pin of src/app has diverged from origin/main; b switches the branch`; `the pin of src/app is ahead of origin/main`; `src/app is up to date with origin/main` (the superproject without `the pin of`); after the check `can't update src/app: main is a local branch; b switches to it` |
+| `m` resolve pin conflict | [Resolve pin conflict](#resolve-pin-conflict) | `this data source can't resolve pin conflicts`; `wait for the restore of … to finish`; `src/app has no pin conflict` |
+| `u` update pin (`pull (fast-forward)` on the header) | [Update pin](#update-pin) | `this data source can't update pins`; `src/app has a pin conflict; m chooses its pin`; `wait for the restore of … to finish`; `the superproject has no upstream branch`; `src/app is still loading`; `src/app is not initialized; restore it first`; `the pin of src/app is not on a branch`; `the pin of src/app has diverged from origin/main; b switches the branch`; `the pin of src/app is ahead of origin/main`; `src/app is up to date with origin/main` (the superproject without `the pin of`); after the check `can't update src/app: main is a local branch; b switches to it` |
 
 `R` would sit next to `r` (reload), a dangerous mix-up for a destructive
 action, hence `x`.

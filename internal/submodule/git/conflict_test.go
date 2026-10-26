@@ -148,3 +148,54 @@ func TestPinConflictRebaseNames(t *testing.T) {
 		t.Errorf("PinConflict = %+v, want sides main/feat", c)
 	}
 }
+
+func TestResolve(t *testing.T) {
+	p, _, super := conflictFixture(t)
+	ctx := context.Background()
+	pick := func(name string) string {
+		st, err := p.Status(ctx, "libs/"+name)
+		if err != nil || st.PinConflict == nil {
+			t.Fatalf("%s: %v, %+v", name, err, st)
+		}
+		if c := st.PinConflict.Candidates; len(c) > 0 {
+			return c[0].SHA
+		}
+		return st.PinConflict.Theirs.SHA
+	}
+	for _, name := range []string{"alpha", "beta", "gamma"} { // gamma: theirs is fetched
+		sha := pick(name)
+		if loss, err := p.ResolveLoss(ctx, "libs/"+name, sha); err != nil || !loss.Empty() {
+			t.Errorf("%s: ResolveLoss = %+v, %v", name, loss, err)
+		}
+		if err := p.Resolve(ctx, "libs/"+name, sha); err != nil {
+			t.Fatalf("%s: Resolve: %v", name, err)
+		}
+		if got := out(t, super, "ls-files", "-s", "--", "libs/"+name); got != "160000 "+sha+" 0\tlibs/"+name {
+			t.Errorf("%s: index %q, want stage 0 at %s", name, got, sha)
+		}
+		if got := out(t, filepath.Join(super, "libs", name), "rev-parse", "HEAD"); got != sha {
+			t.Errorf("%s: checkout %s, want %s", name, got, sha)
+		}
+		st, err := p.Status(ctx, "libs/"+name)
+		if err != nil || st.PinConflict != nil || !st.PinStaged {
+			t.Errorf("%s after Resolve: %v, conflict %v, staged %v", name, err, st.PinConflict, st.PinStaged)
+		}
+	}
+	if err := p.Resolve(ctx, "libs/alpha", out(t, super, "rev-parse", "HEAD")); err == nil {
+		t.Error("Resolve of a resolved pin succeeded")
+	}
+	out(t, super, "-c", "user.name=A", "-c", "user.email=a@b", "commit", "-q", "--no-edit")
+	assertExact(t, super)
+}
+
+// Resolving with no SHA removes the gitlink: what a side that removed the
+// submodule chose.
+func TestResolveRemove(t *testing.T) {
+	p, _, super := conflictFixture(t)
+	if err := p.Resolve(context.Background(), "libs/beta", ""); err != nil {
+		t.Fatal(err)
+	}
+	if got := out(t, super, "ls-files", "-s", "--", "libs/beta"); got != "" {
+		t.Errorf("index still has %q", got)
+	}
+}

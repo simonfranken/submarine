@@ -59,8 +59,11 @@ type Model struct {
 	restore    *restoreState   // the restore or switch in progress, nil if none
 	picker     *branches.Model // the branch picker, nil if closed
 	pickerPath string          // the repository the picker is for
-	notice     string          // an error to show above the footer until the next key
-	hint       bool            // the hint for newcomers above the footer, until the first key
+	// the picker offers the pins that resolve a pin conflict, not branches:
+	// the SHA ("" removes the submodule) and the words of each item
+	pickerResolve []resolveChoice
+	notice        string // an error to show above the footer until the next key
+	hint          bool   // the hint for newcomers above the footer, until the first key
 
 	checkUpdate func(context.Context) string // looks for a newer release, nil if off
 	update      string                       // the newer release found, "" if none
@@ -460,6 +463,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.startSwitch()
 	case key.Matches(msg, k.Update):
 		return m.startPinUpdate()
+	case key.Matches(msg, k.Resolve):
+		return m.startResolve()
 	case key.Matches(msg, k.Issues):
 		m.tree.SetProblemsOnly(!m.tree.ProblemsOnly())
 		m.layout()
@@ -593,7 +598,8 @@ func (m Model) View() string {
 	}
 
 	// the keys as they read for the selection; m is a copy
-	k := m.keys.forSelection(m.tree.RootSelected())
+	sel := m.tree.Selected()
+	k := m.keys.forSelection(m.tree.RootSelected(), sel != nil && sel.Status != nil && sel.Status.PinConflict != nil)
 	m.footer.SetKeys(k)
 	m.detail.SetActions(k.Submodule())
 

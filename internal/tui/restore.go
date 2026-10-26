@@ -29,6 +29,7 @@ type restoreState struct {
 	loss       submodule.Loss
 	branch     *submodule.Branch // set for a branch switch, which reuses this flow
 	pinUpdate  bool              // a switch to the pin's ref (u); branch is set by the check
+	resolve    *resolveChoice    // set for the resolve of a pin conflict (m), which reuses this flow too
 }
 
 // lossMsg is the result of the check before a restore.
@@ -60,6 +61,8 @@ func (m Model) startRestore(hard bool) (tea.Model, tea.Cmd) {
 		flash = "this data source can't restore"
 	case m.restore != nil:
 		flash = "wait for the restore of " + m.restore.name + " to finish"
+	case s.Status != nil && s.Status.PinConflict != nil:
+		flash = restoreName(s) + " has a pin conflict; m chooses its pin"
 	}
 	if flash != "" {
 		cmd := m.footer.Flash(flash)
@@ -84,11 +87,13 @@ func (m Model) startRestore(hard bool) (tea.Model, tea.Cmd) {
 func (m Model) checkRestore() (tea.Model, tea.Cmd) {
 	m.restore.phase = restoreChecking
 	m.layout()
-	ctx, path, to, b := m.ctx, m.restore.path, m.restore.to, m.restore.branch
+	ctx, path, to, b, res := m.ctx, m.restore.path, m.restore.to, m.restore.branch, m.restore.resolve
 	check := func() tea.Msg {
 		var loss submodule.Loss
 		var err error
-		if b != nil {
+		if res != nil {
+			loss, err = m.provider.(submodule.Resolver).ResolveLoss(ctx, path, res.sha)
+		} else if b != nil {
 			loss, err = m.provider.(submodule.Switcher).SwitchLoss(ctx, path, *b)
 		} else {
 			loss, err = m.provider.(submodule.Restorer).RestoreLoss(ctx, path, to)
@@ -160,8 +165,11 @@ func (m Model) answerRestore(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) runRestore() (tea.Model, tea.Cmd) {
 	m.restore.phase = restoreRunning
 	m.layout()
-	ctx, path, to, b := m.ctx, m.restore.path, m.restore.to, m.restore.branch
+	ctx, path, to, b, res := m.ctx, m.restore.path, m.restore.to, m.restore.branch, m.restore.resolve
 	run := func() tea.Msg {
+		if res != nil {
+			return restoreDoneMsg{path, "", m.provider.(submodule.Resolver).Resolve(ctx, path, res.sha)}
+		}
 		if b != nil {
 			branch, err := m.provider.(submodule.Switcher).Switch(ctx, path, *b)
 			return restoreDoneMsg{path, branch, err}
@@ -178,6 +186,10 @@ func (m Model) restoreDone(msg restoreDoneMsg) (tea.Model, tea.Cmd) {
 	m.restore = nil
 	var cmds []tea.Cmd
 	switch {
+	case r != nil && r.resolve != nil && msg.err != nil:
+		m.notice = "resolve of " + r.name + r.toText() + " failed: " + msg.err.Error()
+	case r != nil && r.resolve != nil:
+		cmds = append(cmds, m.footer.Flash("resolved "+r.name+r.toText()))
 	case r != nil && r.branch != nil && msg.err != nil:
 		m.notice = r.noun() + " of " + r.name + " to " + r.branch.Name + " failed: " + msg.err.Error()
 	case r != nil && r.branch != nil:
@@ -209,6 +221,10 @@ func (m Model) restoreDone(msg restoreDoneMsg) (tea.Model, tea.Cmd) {
 // the usual target and needs no words.
 func (r *restoreState) toText() string {
 	switch {
+	case r.resolve != nil && r.resolve.sha == "":
+		return " by removing it"
+	case r.resolve != nil:
+		return " to " + r.resolve.label
 	case r.branch != nil:
 		return " to " + r.branch.Name
 	case r.to == submodule.RestoreHard:
@@ -223,6 +239,8 @@ func (r *restoreState) toText() string {
 // update are shown like a restore, but name their branch.
 func (r *restoreState) verb() string {
 	switch {
+	case r.resolve != nil:
+		return "Resolve"
 	case r.pinUpdate:
 		return "Update"
 	case r.branch != nil:
@@ -233,6 +251,8 @@ func (r *restoreState) verb() string {
 
 func (r *restoreState) verbIng() string {
 	switch {
+	case r.resolve != nil:
+		return "resolving"
 	case r.pinUpdate:
 		return "updating"
 	case r.branch != nil:

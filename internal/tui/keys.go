@@ -12,8 +12,10 @@ type keyMap struct {
 	Home, End, PageUp, PageDown   key.Binding
 	Fetch, Reload, Filter, Issues key.Binding
 	Copy, Restore, Switch, Update key.Binding
-	HardRestore                   key.Binding
+	HardRestore, Resolve          key.Binding
 	Help, Quit, QuitUpdate        key.Binding
+
+	conflict bool // the selection has a pin conflict: Resolve leads the palette
 }
 
 func defaultKeys() keyMap {
@@ -37,6 +39,7 @@ func defaultKeys() keyMap {
 		HardRestore: key.NewBinding(key.WithKeys("X"), key.WithHelp("X", "restore committed pins")),
 		Switch:      key.NewBinding(key.WithKeys("b"), key.WithHelp("b", "switch branch")),
 		Update:      key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "update pin")),
+		Resolve:     key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "resolve pin conflict")),
 		Copy:        key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "copy path")),
 		Help:        key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		Quit:        key.NewBinding(key.WithKeys("q", "ctrl+c"), key.WithHelp("q", "quit")),
@@ -66,8 +69,13 @@ func (k keyMap) Tools() []key.Binding { return []key.Binding{k.Issues, k.Filter,
 
 // Submodule returns the bindings that act on the selected submodule. They
 // are shown in the detail pane, or in the footer if the pane can't show them.
+// Resolve is only among them, first, for a submodule with a pin conflict.
 func (k keyMap) Submodule() []key.Binding {
-	return []key.Binding{k.Copy, k.Update, k.Switch, k.Restore, k.HardRestore}
+	keys := []key.Binding{k.Copy, k.Update, k.Switch, k.Restore, k.HardRestore}
+	if k.conflict {
+		keys = append([]key.Binding{k.Resolve}, keys...)
+	}
+	return keys
 }
 
 // Global returns the bindings that don't depend on the selection.
@@ -91,11 +99,13 @@ func (k keyMap) Highlight() []key.Binding {
 }
 
 // forSelection returns the keys as they read for the selection: on the
-// superproject, u fast-forwards its branch (D29).
-func (k keyMap) forSelection(root bool) keyMap {
+// superproject, u fast-forwards its branch (D29); a submodule with a pin
+// conflict offers m first.
+func (k keyMap) forSelection(root, conflict bool) keyMap {
 	if root {
 		k.Update.SetHelp("u", "pull (fast-forward)")
 	}
+	k.conflict = conflict
 	return k
 }
 
@@ -106,7 +116,7 @@ func (k keyMap) HelpGroups() []footer.Group {
 	return []footer.Group{
 		{Title: "Move", Keys: []key.Binding{k.Up, k.Down, k.Left, k.Right, k.Toggle, k.CollapseAll, k.ExpandAll}},
 		{Title: "Jump", Keys: []key.Binding{k.Home, k.End, k.PageUp, k.PageDown}},
-		{Title: "Selected submodule", Keys: k.Submodule()},
+		{Title: "Selected submodule", Keys: append(k.Submodule(), k.Resolve)},
 		{Title: "All submodules", Keys: []key.Binding{k.Fetch, k.Reload, k.Filter, k.Issues}},
 		{Title: "App", Keys: append([]key.Binding{help, esc, k.Quit}, k.fullUpdate()...)},
 	}

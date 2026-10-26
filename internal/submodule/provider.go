@@ -72,6 +72,17 @@ type Switcher interface {
 	Switch(ctx context.Context, path string, b Branch) (string, error)
 }
 
+// Resolver is implemented by providers that can resolve a pin conflict (see
+// PinConflict): sha becomes the pin, staged in the parent, which ends the
+// conflict, and the submodule (with everything below it) is restored to it
+// like Restore. sha "" removes the submodule instead, if a side removed it.
+// Resolve may fetch what is missing, but must never prompt the user.
+type Resolver interface {
+	// ResolveLoss reports what Resolve would discard, read from the disk now.
+	ResolveLoss(ctx context.Context, path, sha string) (Loss, error)
+	Resolve(ctx context.Context, path, sha string) error
+}
+
 // RestoreTarget is the pin a submodule is restored to, and whether staged
 // pins below it are kept. The superproject's target is always HEAD; only
 // RestoreHard matters for it.

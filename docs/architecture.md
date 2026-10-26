@@ -12,7 +12,7 @@ cmd/submarine/main.go         wiring: choose provider (git or --mock), start the
 internal/submodule/           domain model; NO UI imports
   model.go                    Repo, Submodule, Status, PinInfo, Commit, enums
   status.go                   Issues(), HiddenIssues(), Walk()
-  provider.go                 Provider interface; optional Fetcher, Watcher, Locator, Restorer, Switcher
+  provider.go                 Provider interface; optional Fetcher, Watcher, Locator, Restorer, Switcher, Resolver
 internal/submodule/git/       provider using the git CLI (reads, fetch, watch)
   exec.go                     git runner (environment, errors)
   parse.go                    pure parsers for git output (status, numstat, …)
@@ -21,6 +21,8 @@ internal/submodule/git/       provider using the git CLI (reads, fetch, watch)
   watch.go                    Watch: polls git metadata for changes
   restore.go                  Restore, RestoreLoss (network: only what is missing)
   switch.go                   Branches, SwitchLoss, Switch (stage the tip, restore, attach or fast-forward the branch)
+  conflict.go                 pin conflicts: side names, operation in progress, commits containing both
+  resolve.go                  ResolveLoss, Resolve (stage the chosen pin, restore)
   gitdir.go                   resolves .git dirs and gitdir: files
 internal/submodule/mock/      fixture provider with artificial latency
 internal/update/              self-update from GitHub releases; NO UI imports
@@ -29,6 +31,7 @@ internal/tui/                 Bubble Tea application
   keys.go                     key bindings (also feed the help view)
   restore.go, switch.go       restore / switch flows; a switch reuses restoreState
   pinupdate.go                update pin (u): a switch to the pin's ref, at the tip the row shows
+  resolve.go                  resolve pin conflict (m): the picker with fixed choices, then the restore flow
   overlay.go                  draws the picker over the finished view at the position the picker reports
   msgs.go                     tree/status/fetch/change messages
   refresh.go                  reloader: one load per key, coalesced reruns
@@ -36,7 +39,7 @@ internal/tui/                 Bubble Tea application
   tree/                       tree component: rows, navigation, mouse, view
   detail/                     detail pane; changes.go: change preview
   header/                     header line
-  branches/                   branch picker popup (search line + list)
+  branches/                   branch picker popup (search line + list); also fixed choices with notes (m)
   footer/                     key bar (navigation and tools left, global right), full help pages (keys, legend) and flash messages
 ```
 
@@ -82,6 +85,13 @@ type Switcher interface {
     Branches(ctx context.Context, path string) ([]Branch, error)          // local + remote, no network
     SwitchLoss(ctx context.Context, path string, b Branch) (Loss, error)  // as RestoreLoss
     Switch(ctx context.Context, path string, b Branch) (string, error)    // branch HEAD ends on, "" if detached
+}
+```
+
+```go
+type Resolver interface {
+    ResolveLoss(ctx context.Context, path, sha string) (Loss, error) // as RestoreLoss
+    Resolve(ctx context.Context, path, sha string) error              // stage sha as the pin, restore; "" removes the gitlink
 }
 ```
 
@@ -248,7 +258,10 @@ go test ./...
   against a fixture repository built by `scripts/make-fixture.sh` (skipped
   if `git` is not installed). Fetch and watch tests build their own
   fixture, since they change it; the fixture's remotes are local bare
-  repositories, so fetching works offline.
+  repositories, so fetching works offline. `make-fixture.sh --pin-conflict`
+  builds a separate superproject in a merge with three pin conflicts (a
+  commit with both sides on `origin/main`, none, theirs not fetched), for
+  the pin conflict and resolve tests.
 - `internal/tui`: `reloader`.
 - `internal/tui/tree`: navigation rules. Tests need `zone.NewGlobal()` (see
   `TestMain`).
@@ -257,6 +270,7 @@ Manual check in a headless terminal:
 
 ```sh
 scripts/make-fixture.sh /tmp/subfix   # superproject with every state
+                                      # (--pin-conflict: one in a merge)
 go build -o /tmp/submarine ./cmd/submarine
 tmux new-session -d -s sub -x 130 -y 24 "/tmp/submarine /tmp/subfix/super"
 tmux send-keys -t sub Down Right

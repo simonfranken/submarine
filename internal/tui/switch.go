@@ -36,7 +36,7 @@ func (m Model) startSwitch() (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	m.picker, m.pickerPath = branches.New(m.theme, restoreName(s)), s.Path
+	m.picker, m.pickerPath, m.pickerResolve = branches.New(m.theme, restoreName(s)), s.Path, nil
 	m.picker.SetSpinner(m.spinner.View())
 	ctx, path := m.ctx, s.Path
 	load := func() tea.Msg {
@@ -49,7 +49,7 @@ func (m Model) startSwitch() (tea.Model, tea.Cmd) {
 // branchesLoaded fills the picker, unless it was closed or is for another
 // repository meanwhile.
 func (m Model) branchesLoaded(msg branchesMsg) (tea.Model, tea.Cmd) {
-	if m.picker == nil || m.pickerPath != msg.path {
+	if m.picker == nil || m.pickerPath != msg.path || m.pickerResolve != nil {
 		return m, nil
 	}
 	if msg.err != nil {
@@ -84,19 +84,26 @@ func (m Model) pickBranch(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// confirmPick closes the picker and switches to the selected branch, with
-// the same check and question as a restore.
+// confirmPick closes the picker and switches to the selected branch (or
+// resolves the pin conflict with the selected pin), with the same check and
+// question as a restore.
 func (m Model) confirmPick() (tea.Model, tea.Cmd) {
-	b := m.picker.Selected()
+	b, i := m.picker.Selected(), m.picker.Index()
 	if b == nil {
 		return m, nil
 	}
 	s := m.byPath[m.pickerPath]
-	m.picker = nil
+	resolve := m.pickerResolve
+	m.picker, m.pickerResolve = nil, nil
 	if s == nil || m.restore != nil {
 		return m, nil
 	}
-	m.restore = &restoreState{path: s.Path, name: restoreName(s), branch: b}
+	m.restore = &restoreState{path: s.Path, name: restoreName(s)}
+	if resolve != nil {
+		m.restore.resolve = &resolve[i]
+	} else {
+		m.restore.branch = b
+	}
 	return m.checkRestore()
 }
 

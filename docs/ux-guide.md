@@ -55,7 +55,8 @@ Keys come in four groups (`keyMap.Navigation`, `.Tools`, `.Submodule`,
   narrow for all keys (none is cut off). It is left out if the pane is
   shorter than 12 lines. Whenever the palette isn't shown (pane hidden or too short), these
   keys move into the footer after the tools. With the header selected, `u`
-  reads `u pull (fast-forward)`, which is what it does there (D29).
+  reads `u pull (fast-forward)`, which is what it does there (D29). For a
+  submodule with a pin conflict, `m resolve pin conflict` comes first (D34).
 
 If the footer is too narrow, keys are dropped from the left group's end
 (submodule keys first, then the tools); the global keys stay. Keys work
@@ -367,6 +368,7 @@ colors in components.
 | `!` | Toggle problems only, see [Problems only](#problems-only) |
 | `x` | Restore the selection, see [Restore](#restore) |
 | `X` | Restore the selection to the committed pins, staged pins dropped at every depth, see [Restore](#restore) |
+| `m` | Resolve the pin conflict of the selection, see [Resolve pin conflict](#resolve-pin-conflict) |
 
 "First child" always means the first child **as displayed** (children are
 grouped by directory).
@@ -469,6 +471,31 @@ than `Muted`, so the popup has the focus.
   [restore](#restore): `checking`, the question `Switch src/app to
   origin/feat? Discards …   y switch · n cancel`, `switching …`.
 
+### Resolve pin conflict
+
+`m` opens the same popup with fixed items instead of branches (see
+[actions.md](actions.md#resolve-pin-conflict)): the title reads `Resolve
+libs/alpha`, the search `/ filter`, the hint `enter resolve`, and each row
+has a muted note after its name. Items without a commit date (not
+fetched, `remove`) show only the SHA.
+
+```
+╭──────────────────────────────────────────────────────────────────────╮
+│ Resolve libs/alpha                                                   │
+│ / filter                                                             │
+│ ──────────────────────────────────────────────────────────────────── │
+│   main  ours · origin/main ↓3                      7333c7f  2h ago   │
+│   feat  theirs · origin/main ↓3                    b4ecee7  3h ago   │
+│   origin/main  has both · 1 behind the tip         32b19cd  1h ago   │
+│ ↑↓ select · enter resolve · esc cancel                               │
+╰──────────────────────────────────────────────────────────────────────╯
+```
+
+Enter continues on the line above the footer like a switch: `checking`,
+the question `Resolve libs/alpha to main 7333c7f? Discards …   y resolve ·
+n cancel` only if something would be lost, `resolving …`, the flash
+`resolved libs/alpha to origin/main 32b19cd`.
+
 ### Update pin
 
 `u` runs without a popup, on the line above the footer like a
@@ -500,6 +527,7 @@ where the palette can't be shown, see [Key bar and palette](#key-bar-and-palette
 | `b` | Switch branch (popup) | Submodule | Palette, Help |
 | `x` | Restore to pin | Submodule | Palette, Help |
 | `X` | Restore committed pins | Submodule | Palette, Help |
+| `m` | Resolve pin conflict (popup) | Submodule | Palette (first, only with a pin conflict), Help |
 | `!` | Problems only (toggle) | Tools | Bar, Help |
 | `/` | Filter | Tools | Bar, Help |
 | `f` | Fetch all repositories | Tools | Bar, Help |

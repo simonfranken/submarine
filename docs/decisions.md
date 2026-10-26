@@ -687,8 +687,16 @@ restored the submodule to the base.
   to the tip is `u`, a separate decision.
 - A restore of the submodule is refused during the conflict: there is no
   pin to restore to.
+- `m` resolves it: the chosen pin replaces the stages in the index, and
+  the submodule is restored to it (fetching it if needed). The choices are
+  a list, so they reuse the branch picker, with a note per item. The first
+  commit with both is preselected: it is what is usually meant.
+- submarine does not merge in the submodule and does not commit the
+  superproject: both create commits, which stay the user's (actions.md
+  principle). Without a commit with both, the user merges in a shell and
+  `m` offers the checkout.
 **Alternatives.** The tip of each branch with both: also pulls in
-unrelated commits. Merging in the submodule from submarine: creates
-commits, which submarine leaves to the user (see actions.md).
+unrelated commits. A one-line prompt (`o ours · t theirs`): can't
+offer a list of candidates.
 **Consequences.** One `name-rev` per side, and two `rev-list
 --ancestry-path` per branch with both sides, only during a conflict.

@@ -61,6 +61,8 @@ func pinUpdateBlocker(s *submodule.Submodule) string {
 	switch {
 	case st == nil:
 		return name + " is still loading"
+	case st.PinConflict != nil:
+		return name + " has a pin conflict; m chooses its pin"
 	case st.Presence != submodule.PresenceOK:
 		return name + " is not initialized; restore it first"
 	case st.Pin.Ref == "" || st.Tip == nil || st.Pin.Source == submodule.RefFromTag || st.Pin.Source == submodule.RefFromSHA:

@@ -1,6 +1,7 @@
 // Package branches is the branch picker: a search line above a list of
 // branches. It holds the state and renders itself; the app decides what the
-// keys do.
+// keys do. It also offers fixed choices of commits, e.g. the pins that
+// resolve a pin conflict, with a note per row.
 package branches
 
 import (
@@ -26,12 +27,14 @@ const (
 type Model struct {
 	theme   theme.Theme
 	title   string
+	verb    string // what enter does, e.g. "Switch"
 	input   textinput.Model
 	all     []submodule.Branch
-	shown   []int // indexes into all that match the search
-	cursor  int   // index into shown
-	offset  int   // first visible index into shown
-	rows    int   // visible list rows
+	notes   []string // per entry of all, shown after the name; nil for none
+	shown   []int    // indexes into all that match the search
+	cursor  int      // index into shown
+	offset  int      // first visible index into shown
+	rows    int      // visible list rows
 	loading bool
 	err     error
 	spinner string
@@ -47,7 +50,20 @@ func New(t theme.Theme, title string) *Model {
 	in.Placeholder = "filter branches"
 	in.PlaceholderStyle = theme.Fg(t.Muted)
 	in.Focus()
-	return &Model{theme: t, title: title, input: in, loading: true, rows: maxRows}
+	return &Model{theme: t, title: title, verb: "Switch", input: in, loading: true, rows: maxRows}
+}
+
+// NewChoices returns a picker filled with items at once: the verb says what
+// enter does ("Resolve"), notes describe each item (same length as items),
+// and cursor is the item selected first.
+func NewChoices(t theme.Theme, verb, title string, items []submodule.Branch, notes []string, cursor int) *Model {
+	m := New(t, title)
+	m.verb, m.notes = verb, notes
+	m.input.Placeholder = "filter"
+	m.SetBranches(items)
+	m.cursor = max(min(cursor, len(m.shown)-1), 0)
+	m.scroll()
+	return m
 }
 
 // SetBranches fills the list and ends the loading state.
@@ -72,6 +88,15 @@ func (m *Model) Selected() *submodule.Branch {
 	}
 	b := m.all[m.shown[m.cursor]]
 	return &b
+}
+
+// Index returns the position of the selected item in the list it was
+// filled with, -1 if none matches.
+func (m *Model) Index() int {
+	if m.cursor < 0 || m.cursor >= len(m.shown) {
+		return -1
+	}
+	return m.shown[m.cursor]
 }
 
 // Title is what the picker switches, e.g. "src/app".
@@ -151,7 +176,7 @@ func (m *Model) View(termWidth, termHeight int) string {
 
 	muted := theme.Fg(m.theme.Muted)
 	lines := []string{
-		theme.Fg(m.theme.Primary).Bold(true).Render(ansi.Truncate("Switch "+m.title, inner, "…")),
+		theme.Fg(m.theme.Primary).Bold(true).Render(ansi.Truncate(m.verb+" "+m.title, inner, "…")),
 		m.input.View(),
 		muted.Render(strings.Repeat(m.theme.Glyphs.Rule, inner)),
 	}
@@ -169,14 +194,14 @@ func (m *Model) View(termWidth, termHeight int) string {
 	default:
 		end := min(m.offset+m.rows, len(m.shown))
 		for i := m.offset; i < end; i++ {
-			body = append(body, m.row(m.all[m.shown[i]], i == m.cursor, inner))
+			body = append(body, m.row(m.shown[i], i == m.cursor, inner))
 		}
 	}
 	for len(body) < m.rows {
 		body = append(body, "")
 	}
 	lines = append(lines, body[:m.rows]...)
-	lines = append(lines, muted.Render(ansi.Truncate("↑↓ select · enter switch · esc cancel", inner, "…")))
+	lines = append(lines, muted.Render(ansi.Truncate("↑↓ select · enter "+strings.ToLower(m.verb)+" · esc cancel", inner, "…")))
 
 	out := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -214,8 +239,10 @@ func (m *Model) Click(x, y, termWidth, termHeight int) (inside, hit bool) {
 	return true, true
 }
 
-// row renders one branch: the name, right-aligned the short SHA and age.
-func (m *Model) row(b submodule.Branch, selected bool, width int) string {
+// row renders the i-th branch: the name and its note, right-aligned the
+// short SHA and age.
+func (m *Model) row(i int, selected bool, width int) string {
+	b := m.all[i]
 	base := lipgloss.NewStyle()
 	if selected {
 		base = base.Background(m.theme.Selected)
@@ -230,7 +257,11 @@ func (m *Model) row(b submodule.Branch, selected bool, width int) string {
 			prefix, name = remote+"/", rest
 		}
 	}
-	right := base.Foreground(m.theme.Muted).Render(short(b.SHA) + "  " + theme.Ago(b.When))
+	meta := short(b.SHA)
+	if !b.When.IsZero() {
+		meta += "  " + theme.Ago(b.When)
+	}
+	right := base.Foreground(m.theme.Muted).Render(meta)
 	room := max(width-lipgloss.Width(right)-3, 1)
 
 	nameStyle := base.Foreground(m.theme.Text)
@@ -239,6 +270,9 @@ func (m *Model) row(b submodule.Branch, selected bool, width int) string {
 	}
 	left := base.Foreground(m.theme.Primary).Render(marker) + base.Render(" ") +
 		base.Foreground(m.theme.Muted).Render(prefix) + nameStyle.Render(name)
+	if i < len(m.notes) && m.notes[i] != "" {
+		left += base.Foreground(m.theme.Muted).Render("  " + m.notes[i])
+	}
 	left = ansi.Truncate(left, room, "…")
 	gap := max(width-lipgloss.Width(left)-lipgloss.Width(right), 1)
 	return left + base.Render(strings.Repeat(" ", gap)) + right

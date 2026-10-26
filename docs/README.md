@@ -35,7 +35,8 @@ fetches only when asked (`f`) and follows changes made in other shells. `submari
 the built-in mock data (`internal/submodule/mock`). `!` shows only
 submodules with problems. `x` restores the selection (`X` also drops
 staged pins), `b` switches its
-branch and `u` updates a pin that is behind ([actions.md](actions.md)).
+branch, `u` updates a pin that is behind and `m` resolves a pin conflict
+of a merge ([actions.md](actions.md)).
 
 Next steps, roughly in order:
 
@@ -46,3 +47,5 @@ Next steps, roughly in order:
    [notes/usability-plan.md](../notes/usability-plan.md). The low-effort
    items are done (D31, D32); next are the issue hints and the palette
    that fits the selection.
+4. (done) Pin conflicts: show a merge conflict on a submodule pin and
+   resolve it with `m` (D34).
