@@ -1,8 +1,8 @@
 # Build and publish submarine. Releases are built locally and uploaded as
 # GitHub release assets (see docs/architecture.md#distribution).
 #
-#   make dist                cross-compile into dist/
-#   make release NOTES=FILE  test, build and publish the tagged HEAD (gh)
+#   make dist      cross-compile into dist/
+#   make release   test, build and publish the tagged HEAD (GH_TOKEN from .env)
 
 # Settings from .env (see .env.template); `make VAR=...` on the command line wins.
 -include .env
@@ -10,6 +10,9 @@ export GH_TOKEN
 
 GITHUB_REPO ?= simonfranken/submarine
 RELEASES    := https://github.com/$(GITHUB_REPO)/releases
+GITHUB_API     ?= https://api.github.com/repos/$(GITHUB_REPO)
+GITHUB_UPLOADS ?= https://uploads.github.com/repos/$(GITHUB_REPO)
+GITHUB_AUTH    := Authorization: Bearer $$GH_TOKEN
 
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS  := -s -w -X main.version=$(VERSION)
@@ -46,17 +49,28 @@ check-tag:
 	@test -z "$$(git status --porcelain)" || { echo "working tree is not clean"; exit 1; }
 
 # A draft gets all assets first and is published last, so releases/latest
-# never points at a release with missing files.
+# never points at a release with missing files. The release has no notes yet.
 release: check-tag
-	@test -n "$(NOTES)" && test -f "$(NOTES)" || { echo "NOTES=FILE with the release notes is required"; exit 1; }
-	@command -v gh >/dev/null || { echo "gh (GitHub CLI) is required"; exit 1; }
-	@gh auth status >/dev/null 2>&1 || { echo "gh is not logged in: run gh auth login or set GH_TOKEN"; exit 1; }
+	@test -n "$$GH_TOKEN" || { echo "GH_TOKEN is not set: add it to .env (see .env.template)"; exit 1; }
 	$(MAKE) clean test vet dist VERSION=$(VERSION)
 	printf '%s\n' '$(VERSION)' > dist/VERSION
-	gh release create '$(VERSION)' --repo '$(GITHUB_REPO)' --verify-tag --draft \
-		--title '$(VERSION)' --notes-file '$(NOTES)' $(BINARIES) dist/checksums.txt dist/VERSION
-	gh release edit '$(VERSION)' --repo '$(GITHUB_REPO)' --draft=false --latest
-	@echo "released $(VERSION): $(RELEASES)/tag/$(VERSION)"
+	@set -e; \
+	curl -fsS -H "$(GITHUB_AUTH)" -o /dev/null "$(GITHUB_API)/git/ref/tags/$(VERSION)" || \
+		{ echo "tag $(VERSION) is not on GitHub: push it first"; exit 1; }; \
+	echo "create draft $(VERSION)"; \
+	id=$$(curl -fsS -D - -o /dev/null -H "$(GITHUB_AUTH)" \
+		-d '{"tag_name":"$(VERSION)","name":"$(VERSION)","draft":true}' \
+		"$(GITHUB_API)/releases" | tr -d '\r' | sed -n 's|^[Ll]ocation: .*/||p'); \
+	test -n "$$id" || { echo "could not create the draft"; exit 1; }; \
+	for f in $(BINARIES) dist/checksums.txt dist/VERSION; do \
+		echo "upload $$(basename $$f)"; \
+		curl -fsS -H "$(GITHUB_AUTH)" -H 'Content-Type: application/octet-stream' \
+			--data-binary @$$f "$(GITHUB_UPLOADS)/releases/$$id/assets?name=$$(basename $$f)" >/dev/null; \
+	done; \
+	echo "publish $(VERSION)"; \
+	curl -fsS -X PATCH -H "$(GITHUB_AUTH)" -d '{"draft":false,"make_latest":"true"}' \
+		"$(GITHUB_API)/releases/$$id" >/dev/null; \
+	echo "released $(VERSION): $(RELEASES)/tag/$(VERSION)"
 
 clean:
 	rm -rf dist submarine

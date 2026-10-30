@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/simonfranken/submarine/main/install
 
 Installs `submarine` and the alias `sub` (linux/macOS, amd64/arm64) to
 `~/.local/bin`. Update with `submarine update`. Maintainers publish with
-`make release NOTES=…` (see [architecture](architecture.md#distribution)).
+`make release` (see [architecture](architecture.md#distribution)).
 
 ## Status
 

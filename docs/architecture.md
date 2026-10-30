@@ -213,11 +213,11 @@ No CI runner: releases are built and published from a developer machine.
 - `make dist` cross-compiles `CGO_ENABLED=0` binaries for linux/darwin ×
   amd64/arm64 into `dist/` plus `checksums.txt`; the version comes from
   `git describe` and is baked in with `-X main.version`.
-- `make release NOTES=FILE` (needs `gh` logged in, or `GH_TOKEN` in `.env`,
-  see `.env.template`; HEAD must be a clean `vX.Y.Z` tag pushed to GitHub)
-  runs tests, builds and creates the GitHub release `vX.Y.Z` with the notes
-  and the assets `submarine_<os>_<arch>`, `checksums.txt` and `VERSION`. It
-  is created as a **draft** and published last, so `releases/latest` never
+- `make release` (needs `GH_TOKEN` in `.env`, see `.env.template`; uses the
+  GitHub API with `curl`; HEAD must be a clean `vX.Y.Z` tag pushed to GitHub) runs tests, builds and
+  creates the GitHub release `vX.Y.Z` with the assets
+  `submarine_<os>_<arch>`, `checksums.txt` and `VERSION`. It is created
+  without notes as a **draft** and published last, so `releases/latest` never
   points at a release with missing assets. Clients read, without the API
   (plain redirects, no rate limit), below
   `https://github.com/simonfranken/submarine/releases`:
@@ -230,7 +230,8 @@ No CI runner: releases are built and published from a developer machine.
 - The `release` skill (`.claude/skills/release/SKILL.md`) drives a release:
   latest tag → next semver from the commits since → check (`vet`, `test`,
   `gofmt`, `make dist`) → tag and push → the developer runs `make release` →
-  the skill verifies that `latest/download/VERSION` serves the new version.
+  the skill verifies that `latest/download/VERSION` serves the new version,
+  then writes the release notes.
 - `install.sh` (`curl -fsSL …/raw/branch/main/install.sh | sh`) detects
   OS/arch, verifies the sha256, installs `submarine` and a `sub` symlink to
   `~/.local/bin` (`SUBMARINE_INSTALL_DIR`, `SUBMARINE_VERSION`,
