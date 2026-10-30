@@ -29,9 +29,9 @@ the questions you actually have:
   seconds. It never fetches on its own: the detail pane shows when a
   repository was last fetched, `f` fetches everything.
 - **Fix it from the same screen.** Restore a repository to exactly what git
-  records (`x`), switch it to another branch (`b`), or move a pin that is
-  behind to the tip of its branch (`u`). They ask first if work would be
-  lost.
+  records (`x`), switch it to another branch (`b`), move a pin that is
+  behind to the tip of its branch (`u`), or resolve a pin conflict during a
+  merge (`m`). They ask first if work would be lost.
 - **Built for dozens to hundreds of submodules.** Each status loads
   asynchronously, so the UI never freezes.
 
@@ -175,6 +175,7 @@ files.
 | `b` | Switch branch: pick a local or remote branch; its tip is staged and the repository restored to it |
 | `x` | Restore to pin: make the worktree exactly what git records (asks if work would be lost) |
 | `X` | Restore committed pins: like `x`, but dropping all staged pins below (asks first) |
+| `m` | Resolve pin conflict: pick ours, theirs or a commit with both; it is staged and the repository restored to it |
 | `f` / `r` | Fetch / reload |
 | `?` | Full help: every key, then what the words and symbols mean (`esc` closes it) |
 | `q` | Quit. If a newer release exists, the footer offers `q quit and update to vX` (highlighted) and plain quit moves to `Q` |
@@ -185,8 +186,8 @@ click outside to close it.
 
 ## Status
 
-A prototype. Browsing is complete. Three write actions exist: restore (`x`),
-switch branch (`b`) and update pin (`u`), see
+A prototype. Browsing is complete. Four write actions exist: restore (`x`),
+switch branch (`b`), update pin (`u`) and resolve pin conflict (`m`), see
 [docs/actions.md](docs/actions.md).
 
 ## Documentation
